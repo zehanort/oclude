@@ -141,9 +141,9 @@ int main(int argc, char const *argv[]) {
     std::cout << prefix << "Using device: " << device_name
               << " (device OpenCL version: " << device.getInfo<CL_DEVICE_VERSION>() << ')' << std::endl;
 
-    /*************************************
-     * PART 3: PROGRAM ENVIRONMENT SETUP *
-     *************************************/
+    /************************************
+     * PART 3: KERNEL ENVIRONMENT SETUP *
+     ************************************/
     cl::Context context({device});
     cl::Program program(context, loadProgram(kernel_file), false);
     if (program.build({device}) != CL_SUCCESS) {
@@ -151,10 +151,20 @@ int main(int argc, char const *argv[]) {
         exit(1);
     }
     cl::CommandQueue queue(context, device);
+    auto kernel = cl::Kernel(program, kernel_name.c_str());
 
     /*****************************************
      * PART X: KERNEL CREATION AND EXECUTION *
      *****************************************/
+
+    /*** Step 1: identify kernel arguments ***/
+    cl_uint nargs = kernel.getInfo<CL_KERNEL_NUM_ARGS>();
+    for (cl_uint i = 0; i < nargs; i++)
+        std::cout << "Argument " << i << ": " << kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) << " type: "
+                                              << kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i) << " address qual: "
+                                              << kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i) << " access qual: "
+                                              << kernel.getArgInfo<CL_KERNEL_ARG_ACCESS_QUALIFIER>(i) << " type qual: "
+                                              << kernel.getArgInfo<CL_KERNEL_ARG_TYPE_QUALIFIER>(i) << std::endl;
 
     /*** TESTING VADD FOR NOW ***/
 
@@ -167,17 +177,14 @@ int main(int argc, char const *argv[]) {
 
     for(int i = 0; i < LENGTH; i++) h_a[i] = h_b[i] = 2*i;
 
-    // auto vadd = cl::make_kernel<cl::Buffer, cl::Buffer, cl::Buffer, int>(program, kernel_name);
-    auto vadd = cl::Kernel(program, kernel_name.c_str());
-
     cl::Buffer d_a = cl::Buffer(context, begin(h_a), end(h_a), true);
     cl::Buffer d_b = cl::Buffer(context, begin(h_b), end(h_b), true);
     cl::Buffer d_c = cl::Buffer(context, CL_MEM_WRITE_ONLY, sizeof(int) * LENGTH);
 
-    vadd.setArg(0, d_a);
-    vadd.setArg(1, d_b);
-    vadd.setArg(2, d_c);
-    vadd.setArg(3, LENGTH);
+    kernel.setArg(0, d_a);
+    kernel.setArg(1, d_b);
+    kernel.setArg(2, d_c);
+    kernel.setArg(3, LENGTH);
     // vadd(
     //     cl::EnqueueArgs(
     //         queue,
@@ -188,7 +195,7 @@ int main(int argc, char const *argv[]) {
     //     d_c,
     //     LENGTH);
 
-    queue.enqueueNDRangeKernel(vadd, cl::NullRange, cl::NDRange(LENGTH), cl::NullRange);
+    queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(LENGTH), cl::NullRange);
 
     // queue.finish();
 
