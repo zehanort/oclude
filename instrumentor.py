@@ -71,9 +71,6 @@ while idx < len(src):
 			instrsrc += c + (' ' if j == len(word) - 1 else '')
 		idx += 1
 
-with open('psoli', 'w') as f:
-	f.write(instrsrc)
-
 ####################################
 # step 3: add missing curly braces #
 ####################################
