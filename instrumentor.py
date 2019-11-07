@@ -1,8 +1,8 @@
-import utils
 from sys import argv, stderr
 import subprocess as sp
 import re
 import os
+import utils
 
 prompt = '[instrumentor]'
 tempfile = '.oclude_tmp_instr_src.cl'
@@ -26,7 +26,7 @@ if len(argv) < 2:
 # step 1: remove comments #
 ###########################
 with open(argv[1], 'r') as f:
-    src = utils.removeComments(f.read())
+    src = utils.remove_comments(f.read())
 
 ##################################################
 # step 2: add hidden counter argument in kernels #
@@ -95,6 +95,9 @@ if (cmdout.returncode != 0):
 
 instrsrc = cmdout.stdout.decode('ascii')
 
+#########################################################################
+# step 5: instrument source code with counter incrementing where needed #
+#########################################################################
 print(instrsrc)
 os.remove(tempfile)
 stderr.write(f'{prompt} intrumentation completed successfully\n')

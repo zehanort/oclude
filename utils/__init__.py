@@ -1,1 +1,1 @@
-from .CommentRemover import removeComments
+from .utils import remove_comments

@@ -1,10 +1,11 @@
 ### modified version of: http://www.cmycode.com/2016/02/program-for-remove-comments-c.html ###
 
-COMMENT_START = '/'
-ONELINE_COMMENT = 1
-MULTILINE_COMMENT = 2
+def remove_comments(src):
 
-def removeComments(src):
+    COMMENT_START = '/'
+    ONELINE_COMMENT = 1
+    MULTILINE_COMMENT = 2
+
     retsrc = ''
     escape = False
     comment_type = 0
