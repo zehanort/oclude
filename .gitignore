@@ -1,2 +1,6 @@
 oclude
+**/instrumentation-parser
+**/*.cl
+**/*.ll
+**/*.bc
 **/*.pyc
