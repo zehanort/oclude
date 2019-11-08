@@ -7,15 +7,14 @@ CXX=g++
 CXXFLAGS=-std=c++11 -Wall -Werror
 LDFLAGS=-lOpenCL
 
-default: oclude commentsout
+default: oclude
 
 oclude: oclude.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
-
-commentsout: commentsout.c
-	$(CC) $(CFLAGS) -o $@ $^
+	cd utils; $(MAKE)
 
 clean:
-	$(RM) oclude commentsout
+	$(RM) oclude
+	cd utils; $(MAKE) clean
 
 distclean: clean

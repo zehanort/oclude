@@ -1,7 +1,7 @@
-### modified version of: http://www.cmycode.com/2016/02/program-for-remove-comments-c.html ###
+hidden_counter_name = 'ocludeHiddenCounter'
 
 def remove_comments(src):
-
+    ### modified version of: http://www.cmycode.com/2016/02/program-for-remove-comments-c.html ###
     COMMENT_START = '/'
     ONELINE_COMMENT = 1
     MULTILINE_COMMENT = 2
@@ -75,3 +75,23 @@ def remove_comments(src):
         retsrc += c
 
     return retsrc
+
+from string import Template
+hidden_counter_incr = Template(f'{hidden_counter_name}[$key] += $val;')
+
+def instrumentation_data(src):
+    '''
+    returns a dictionary "line (int): code to add (string)"
+    '''
+
+    def write_incr(key, val):
+        '''
+        returns the instrumentation string
+        '''
+        return hidden_counter_incr.substitute(
+            {
+                'key': key,
+                'val': val
+            }
+        )
+

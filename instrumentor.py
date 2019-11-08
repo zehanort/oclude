@@ -6,7 +6,7 @@ import utils
 
 prompt = '[instrumentor]'
 tempfile = '.oclude_tmp_instr_src.cl'
-counterBuffer = ', __global int *ocludeHiddenCounter'
+counterBuffer = f', __global int *{utils.hidden_counter_name}'
 
 missingCurlyBracesAdder = 'clang-tidy'
 missingCurlyBracesAdderFlags = ['-fix',
@@ -98,6 +98,8 @@ instrsrc = cmdout.stdout.decode('ascii')
 #########################################################################
 # step 5: instrument source code with counter incrementing where needed #
 #########################################################################
+
+
 print(instrsrc)
 os.remove(tempfile)
 stderr.write(f'{prompt} intrumentation completed successfully\n')
