@@ -2,7 +2,7 @@
 
 CXX=g++
 CXXFLAGS=-std=c++14 `llvm-config --cxxflags`
-LDFLAGS=`llvm-config --ldflags --system-libs --libs all` /usr/lib/x86_64-linux-gnu/libfl.a
+LDFLAGS=`llvm-config --ldflags --system-libs --libs all`
 
 default: instrumentation-parser
 
