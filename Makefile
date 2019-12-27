@@ -4,7 +4,7 @@ CC=gcc
 CFLAGS=
 
 CXX=g++
-CXXFLAGS=-std=c++11 -Wall -Werror
+CXXFLAGS=-std=c++11 -Wall -Werror -O3
 LDFLAGS=-lOpenCL
 
 default: oclude

@@ -4,7 +4,7 @@ import re
 import os
 import utils
 
-prompt = '[instrumentor]'
+prompt = '[' + argv[0].split('.')[0] +  ']'
 tempfile = '.oclude_tmp_instr_src.cl'
 counterBuffer = f', __global int *{utils.hidden_counter_name}'
 
@@ -22,6 +22,10 @@ if len(argv) < 2:
     stderr.write(f'{prompt} error: no input file provided\n')
     exit(1)
 
+if not os.path.exists(argv[1]):
+    stderr.write(f'{prompt} error: {argv[1]} is not a file\n')
+    exit(1)
+
 ###########################
 # step 1: remove comments #
 ###########################
@@ -31,7 +35,7 @@ with open(argv[1], 'r') as f:
 ##################################################
 # step 2: add hidden counter argument in kernels #
 ##################################################
-src = re.findall(r'\S+|\n',src)
+src = re.findall(r'\S+|\n', src)
 instrsrc = ''
 
 cnt = 0
@@ -46,7 +50,6 @@ while idx < len(src):
             cnt = 0
         idx += 1
         instrsrc += word + ' '
-        # print(word, end=' ')
     ### not inside a kernel function header ###
     else:
         for j, c in enumerate(word):
