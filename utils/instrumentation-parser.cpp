@@ -59,7 +59,8 @@ int main(int argc, char const *argv[]) {
                 llvm::DebugLoc loc(metadata);
                 std::cerr << prefix << "\t\tinstruction " << instr->getOpcodeName()
                           << " from source code line " << loc.getLine() << " column " << loc.getCol() << std::endl;
-                bb_instrumentation.push_back(std::to_string(loc.getLine()) + ':' + instr->getOpcodeName());
+                if (loc.getLine() != 0)
+                    bb_instrumentation.push_back(std::to_string(loc.getLine()) + ':' + instr->getOpcodeName());
             }
 
             func_instrumentation.push_back(bb_instrumentation);
