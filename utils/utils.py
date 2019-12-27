@@ -105,3 +105,19 @@ def instrumentation_data(src):
             }
         )
 
+    ### NEEDS TO BE FILLED ###
+
+def instrument_file(filename, instr_data):
+    '''
+    modifies the file in place with the instr_data dict provided
+    the instr_data is a dict <line:instrumentation_data>
+    '''
+    with open(filename, 'r') as f:
+        filedata = f.readlines()
+    offset = 0
+    for lineno in instr_data.keys():
+        # must add instrumentation data between the previous line and this one
+        filedata.insert(lineno + offset, instr_data[lineno] + '\n')
+        offset += 1
+    with open(filename, 'w') as f:
+        f.writelines(filedata)
