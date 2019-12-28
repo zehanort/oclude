@@ -6,6 +6,7 @@ import utils
 
 prompt = '[' + argv[0].split('.')[0] +  ']'
 tempfile = '.oclude_tmp_instr_src.cl'
+templlvm = '.oclude_tmp_instr_ll.ll'
 counterBuffer = f', __global int *{utils.hidden_counter_name}'
 
 missingCurlyBracesAdder = 'clang-tidy'
@@ -17,6 +18,12 @@ missingCurlyBracesAdderFlags = ['-fix',
 
 braceBreaker = 'clang-format'
 braceBreakerFlags = ['-style="{BreakBeforeBraces: Allman}"']
+
+instrumentationGetter = os.path.join('utils', 'instrumentation-parser')
+
+cl2llCompiler = 'clang'
+cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm',
+                      '-S', '-cl-std=CL2.0', '-Xclang', '-finclude-default-header']
 
 if len(argv) < 2:
     stderr.write(f'{prompt} error: no input file provided\n')
@@ -82,9 +89,6 @@ if (cmdout.returncode != 0):
     stderr.write(f'{prompt} error while running {missingCurlyBracesAdder}: {cmdout.stderr.decode("ascii")}\n')
     exit(cmdout.returncode)
 
-with open(tempfile, 'r') as f:
-    instrsrc = f.read()
-
 #################################################
 # step 4: add new line before every curly brace #
 #################################################
@@ -96,13 +100,42 @@ if (cmdout.returncode != 0):
     stderr.write(f'{prompt} error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}\n')
     exit(cmdout.returncode)
 
-instrsrc = cmdout.stdout.decode('ascii')
+with open(tempfile, 'w') as f:
+    f.write(cmdout.stdout.decode('ascii'))
 
 #########################################################################
 # step 5: instrument source code with counter incrementing where needed #
 #########################################################################
 
+# first take the instrumentation data from the respective tool
+# after compiling source to LLVM bitcode
 
-print(instrsrc)
+cl2llCompilerCmd = ' '.join([cl2llCompiler, *cl2llCompilerFlags, '-o', templlvm, tempfile])
+stderr.write(f'{prompt} going to run command: {cl2llCompilerCmd}\n')
+
+cmdout = sp.run(cl2llCompilerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+if (cmdout.returncode != 0):
+    stderr.write(f'{prompt} error while running {cl2llCompiler}: {cmdout.stderr.decode("ascii")}\n')
+    exit(cmdout.returncode)
+
+instrumentationGetterCmd = ' '.join([instrumentationGetter, templlvm])
+stderr.write(f'{prompt} going to run command: {instrumentationGetterCmd}\n')
+
+cmdout = sp.run(instrumentationGetterCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+if (cmdout.returncode != 0):
+    stderr.write(f'{prompt} error while running {instrumentationGetter}: {cmdout.stderr.decode("ascii")}\n')
+    exit(cmdout.returncode)
+
+os.remove(templlvm)
+
+instrumentation_data = cmdout.stdout.decode('ascii')
+
+# now add them to the source file, eventually instrumenting it
+utils.instrument_sourcefile(tempfile, instrumentation_data)
+
+# instrumentation is done! Congrats!
+print(f'{prompt} Final instrumented source code for inspection:')
+with open(tempfile, 'r') as f:
+    print(f.read())
 os.remove(tempfile)
 stderr.write(f'{prompt} intrumentation completed successfully\n')

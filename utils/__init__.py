@@ -1,1 +1,1 @@
-from .utils import hidden_counter_name, remove_comments, instrumentation_data
+from .utils import hidden_counter_name, remove_comments, instrument_sourcefile

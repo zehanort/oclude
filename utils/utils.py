@@ -3,10 +3,11 @@ llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
                      'lshr', 'ashr', 'and', 'or', 'xor', 'extractelement',
                      'insertelement', 'shufflevector', 'extractvalue', 'insertvalue',
                      'alloca', 'load', 'store', 'fence', 'cmpxchg', 'atomicrmw', 'getelementptr',
-                     'ret', 'br', 'switch', 'indirectbr', 'invoke', 'callbr', 'resume', 'catchswitch',
+                     'ret', 'br', 'switch', 'indirectbr', 'invoke', 'call', 'callbr', 'resume', 'catchswitch',
                      'catchret', 'cleanupret', 'unreachable', 'trunc', 'zext', 'sext', 'fptrunc', 'fpext',
                      'fptoui', 'fptosi', 'uitofp', 'sitofp', 'ptrtoint', 'inttoptr', 'bitcast', 'addrspacecast',
-                     'other']
+                     'icmp', 'fcmp', 'phi', 'select', 'freeze', 'call', 'va_arg',
+                     'landingpad', 'catchpad', 'cleanuppad']
 
 hidden_counter_name = 'ocludeHiddenCounter'
 
@@ -86,13 +87,14 @@ def remove_comments(src):
 
     return retsrc
 
-from string import Template
-hidden_counter_incr = Template(f'{hidden_counter_name}[$key] += $val;')
-
-def instrumentation_data(src):
+def instrument_sourcefile(filename, instr_data_raw):
     '''
     returns a dictionary "line (int): code to add (string)"
     '''
+
+    from collections import defaultdict
+    from string import Template
+    hidden_counter_incr = Template(f'{hidden_counter_name}[$key] += $val;')
 
     def write_incr(key, val):
         '''
@@ -105,19 +107,26 @@ def instrumentation_data(src):
             }
         )
 
-    ### NEEDS TO BE FILLED ###
+    # parse instrumentation data and create an instrumentation dict
+    instr_data_dict = defaultdict(str)
+    for line in instr_data_raw.splitlines():
+        bb_instrumentation_data = [0] * len(llvm_instructions)
+        data = filter(None, line.split('|')[1:])
+        for datum in data:
+            [lineno, instruction] = datum.split(':')
+            bb_instrumentation_data[llvm_instructions.index(instruction)] += 1
+        for instruction_index, instruction_cnt in enumerate(bb_instrumentation_data):
+            if instruction_cnt > 0:
+                instr_data_dict[int(lineno)] += write_incr(instruction_index, instruction_cnt)
 
-def instrument_file(filename, instr_data):
-    '''
-    modifies the file in place with the instr_data dict provided
-    the instr_data is a dict <line:instrumentation_data>
-    '''
+    # now modify the file in place with the instr_data dict
+    # the instr_data is a dict <line:instrumentation_data>
     with open(filename, 'r') as f:
         filedata = f.readlines()
     offset = 0
-    for lineno in instr_data.keys():
+    for lineno in instr_data_dict.keys():
         # must add instrumentation data between the previous line and this one
-        filedata.insert(lineno + offset, instr_data[lineno] + '\n')
+        filedata.insert(lineno + offset - 1, instr_data_dict[lineno] + '\n')
         offset += 1
     with open(filename, 'w') as f:
         f.writelines(filedata)
