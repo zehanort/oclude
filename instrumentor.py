@@ -7,7 +7,6 @@ import utils
 prompt = '[' + argv[0].split('.')[0] +  ']'
 tempfile = '.oclude_tmp_instr_src.cl'
 templlvm = '.oclude_tmp_instr_ll.ll'
-counterBuffer = f', __global int *{utils.hidden_counter_name}'
 
 missingCurlyBracesAdder = 'clang-tidy'
 missingCurlyBracesAdderFlags = ['-fix',
@@ -26,11 +25,11 @@ cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm',
                       '-S', '-cl-std=CL2.0', '-Xclang', '-finclude-default-header']
 
 if len(argv) < 2:
-    stderr.write(f'{prompt} error: no input file provided\n')
+    stderr.write(f'{prompt} Error: no input file provided\n')
     exit(1)
 
 if not os.path.exists(argv[1]):
-    stderr.write(f'{prompt} error: {argv[1]} is not a file\n')
+    stderr.write(f'{prompt} Error: {argv[1]} is not a file\n')
     exit(1)
 
 ###########################
@@ -67,11 +66,8 @@ while idx < len(src):
                 # reached end of kernel declaration?
                 if (cnt == 0):
                     kernel_mode = False
-                    # print(counterBuffer, end='')
-                    # print(word[j:], end=' ')
-                    instrsrc += counterBuffer + word[j:] + ' '
+                    instrsrc += utils.counterBuffers + word[j:]
                     break
-            # print(c, end=' ' if j == len(word) - 1 else '')
             instrsrc += c + (' ' if j == len(word) - 1 else '')
         idx += 1
 
@@ -82,22 +78,22 @@ with open(tempfile, 'w') as f:
     f.write(instrsrc)
 
 addMissingCurlyBracesCmd = ' '.join([missingCurlyBracesAdder, tempfile, *missingCurlyBracesAdderFlags])
-stderr.write(f'{prompt} going to run command: {addMissingCurlyBracesCmd}\n')
+stderr.write(f'{prompt} Adding missing curly braces: {addMissingCurlyBracesCmd}\n')
 
 cmdout = sp.run(addMissingCurlyBracesCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} error while running {missingCurlyBracesAdder}: {cmdout.stderr.decode("ascii")}\n')
+    stderr.write(f'{prompt} Error while running {missingCurlyBracesAdder}: {cmdout.stderr.decode("ascii")}\n')
     exit(cmdout.returncode)
 
 #################################################
 # step 4: add new line before every curly brace #
 #################################################
 braceBreakerCmd = ' '.join([braceBreaker, *braceBreakerFlags, tempfile])
-stderr.write(f'{prompt} going to run command: {braceBreakerCmd}\n')
+stderr.write(f'{prompt} Breaking curly braces: {braceBreakerCmd}\n')
 
 cmdout = sp.run(braceBreakerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}\n')
+    stderr.write(f'{prompt} Error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}\n')
     exit(cmdout.returncode)
 
 with open(tempfile, 'w') as f:
@@ -111,19 +107,19 @@ with open(tempfile, 'w') as f:
 # after compiling source to LLVM bitcode
 
 cl2llCompilerCmd = ' '.join([cl2llCompiler, *cl2llCompilerFlags, '-o', templlvm, tempfile])
-stderr.write(f'{prompt} going to run command: {cl2llCompilerCmd}\n')
+stderr.write(f'{prompt} Compiling source to LLVM bitcode: {cl2llCompilerCmd}\n')
 
 cmdout = sp.run(cl2llCompilerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} error while running {cl2llCompiler}: {cmdout.stderr.decode("ascii")}\n')
+    stderr.write(f'{prompt} Error while running {cl2llCompiler}: {cmdout.stderr.decode("ascii")}\n')
     exit(cmdout.returncode)
 
 instrumentationGetterCmd = ' '.join([instrumentationGetter, templlvm])
-stderr.write(f'{prompt} going to run command: {instrumentationGetterCmd}\n')
+stderr.write(f'{prompt} Instrumenting source: {instrumentationGetterCmd}\n')
 
 cmdout = sp.run(instrumentationGetterCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} error while running {instrumentationGetter}: {cmdout.stderr.decode("ascii")}\n')
+    stderr.write(f'{prompt} Error while running {instrumentationGetter}: {cmdout.stderr.decode("ascii")}\n')
     exit(cmdout.returncode)
 
 os.remove(templlvm)
@@ -134,8 +130,8 @@ instrumentation_data = cmdout.stdout.decode('ascii')
 utils.instrument_sourcefile(tempfile, instrumentation_data)
 
 # instrumentation is done! Congrats!
-print(f'{prompt} Final instrumented source code for inspection:')
+stderr.write(f'{prompt} Final instrumented source code for inspection:\n')
 with open(tempfile, 'r') as f:
     print(f.read())
 os.remove(tempfile)
-stderr.write(f'{prompt} intrumentation completed successfully\n')
+stderr.write(f'{prompt} Intrumentation completed successfully\n')

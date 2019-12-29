@@ -1,3 +1,5 @@
+import os
+
 llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
                      'fneg', 'fadd', 'fsub', 'fmul', 'fdiv', 'frem', 'shl',
                      'lshr', 'ashr', 'and', 'or', 'xor', 'extractelement',
@@ -9,7 +11,12 @@ llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
                      'icmp', 'fcmp', 'phi', 'select', 'freeze', 'call', 'va_arg',
                      'landingpad', 'catchpad', 'cleanuppad']
 
-hidden_counter_name = 'ocludeHiddenCounter'
+hidden_counter_name_local = 'ocludeHiddenCounterLocal'
+hidden_counter_name_global = 'ocludeHiddenCounterGlobal'
+counterBufferLocal = f', __local uint *{hidden_counter_name_local}'
+counterBufferGlobal = f', __global uint *{hidden_counter_name_global}'
+# only the following will be exported and used by the instrumentor
+counterBuffers = counterBufferLocal + ' ' + counterBufferGlobal
 
 def remove_comments(src):
     ### modified version of: http://www.cmycode.com/2016/02/program-for-remove-comments-c.html ###
@@ -85,7 +92,8 @@ def remove_comments(src):
 
         retsrc += c
 
-    return retsrc
+    # return the source string without empty lines
+    return os.linesep.join([c for c in retsrc.splitlines() if c])
 
 def instrument_sourcefile(filename, instr_data_raw):
     '''
@@ -93,19 +101,12 @@ def instrument_sourcefile(filename, instr_data_raw):
     '''
 
     from collections import defaultdict
-    from string import Template
-    hidden_counter_incr = Template(f'{hidden_counter_name}[$key] += $val;')
 
     def write_incr(key, val):
         '''
         returns the instrumentation string
         '''
-        return hidden_counter_incr.substitute(
-            {
-                'key': key,
-                'val': val
-            }
-        )
+        return f'atomic_add(&{hidden_counter_name_local}[{key}], {val});'
 
     # parse instrumentation data and create an instrumentation dict
     instr_data_dict = defaultdict(str)
