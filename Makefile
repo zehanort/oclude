@@ -4,17 +4,17 @@ CC=gcc
 CFLAGS=
 
 CXX=g++
-CXXFLAGS=-std=c++11 -Wall -Werror -O3
+CXXFLAGS=-std=c++14 -Wall -Werror -O3
 LDFLAGS=-lOpenCL
 
-default: oclude
+default: hostcode-wrapper
 
-oclude: oclude.cpp
+hostcode-wrapper: hostcode-wrapper.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 	cd utils; $(MAKE)
 
 clean:
-	$(RM) oclude
+	$(RM) hostcode-wrapper
 	cd utils; $(MAKE) clean
 
 distclean: clean
