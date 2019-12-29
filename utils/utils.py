@@ -18,6 +18,13 @@ counterBufferGlobal = f', __global uint *{hidden_counter_name_global}'
 # only the following will be exported and used by the instrumentor
 counterBuffers = counterBufferLocal + ' ' + counterBufferGlobal
 
+epilogue = f'''if (get_local_id(0) == 0) {{
+    int glid = get_global_id(0);
+    for (int i = glid; i < glid + {len(llvm_instructions)}; i++)
+        {hidden_counter_name_global}[i] = {hidden_counter_name_local}[i - glid];
+}}
+'''
+
 def remove_comments(src):
     ### modified version of: http://www.cmycode.com/2016/02/program-for-remove-comments-c.html ###
     COMMENT_START = '/'
@@ -93,7 +100,7 @@ def remove_comments(src):
         retsrc += c
 
     # return the source string without empty lines
-    return os.linesep.join([c for c in retsrc.splitlines() if c])
+    return os.linesep.join([line for line in retsrc.splitlines() if line])
 
 def instrument_sourcefile(filename, instr_data_raw):
     '''
@@ -124,10 +131,18 @@ def instrument_sourcefile(filename, instr_data_raw):
     # the instr_data is a dict <line:instrumentation_data>
     with open(filename, 'r') as f:
         filedata = f.readlines()
-    offset = 0
+    offset = -1
+    insertion_line = 0
     for lineno in instr_data_dict.keys():
         # must add instrumentation data between the previous line and this one
-        filedata.insert(lineno + offset - 1, instr_data_dict[lineno] + '\n')
+        insertion_line = lineno + offset
+        filedata.insert(insertion_line, instr_data_dict[lineno] + '\n')
         offset += 1
+    insertion_line += 1
+
+    # lastly, add code at the end to copy local buffer to the respective space in the global one
+    filedata.insert(insertion_line, epilogue)
+
+    # done; write the instrumented source back to file
     with open(filename, 'w') as f:
         f.writelines(filedata)
