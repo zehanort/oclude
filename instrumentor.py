@@ -130,6 +130,16 @@ instrumentation_data = cmdout.stdout.decode('ascii')
 utils.instrument_sourcefile(tempfile, instrumentation_data)
 
 # instrumentation is done! Congrats!
+stderr.write(f'{prompt} Prettifing instrumented source code: {braceBreakerCmd}\n')
+
+cmdout = sp.run(braceBreakerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+if (cmdout.returncode != 0):
+    stderr.write(f'{prompt} Error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}\n')
+    exit(cmdout.returncode)
+
+with open(tempfile, 'w') as f:
+    f.write(cmdout.stdout.decode('ascii'))
+
 stderr.write(f'{prompt} Final instrumented source code for inspection:\n')
 with open(tempfile, 'r') as f:
     print(f.read())
