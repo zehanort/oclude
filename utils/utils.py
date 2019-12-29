@@ -11,6 +11,9 @@ llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
                      'icmp', 'fcmp', 'phi', 'select', 'freeze', 'call', 'va_arg',
                      'landingpad', 'catchpad', 'cleanuppad']
 
+tempfile = '.oclude_tmp_instr_src.cl'
+templlvm = '.oclude_tmp_instr_ll.ll'
+
 hidden_counter_name_local = 'ocludeHiddenCounterLocal'
 hidden_counter_name_global = 'ocludeHiddenCounterGlobal'
 counterBufferLocal = f', __local uint *{hidden_counter_name_local}'
