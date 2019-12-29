@@ -14,7 +14,7 @@ std::string prefix;
 inline std::string loadProgram(std::string input) {
     std::ifstream stream(input.c_str());
     if (!stream.is_open()) {
-        std::cout << prefix << "Cannot open file: " << input << std::endl;
+        std::cerr << prefix << "Cannot open file: " << input << std::endl;
         exit(1);
     }
     return std::string(
@@ -55,21 +55,21 @@ int main(int argc, char const *argv[]) {
 
     if (platform_str == EMPTY_STRING) {
 
-        std::cout << prefix << "Platform not chosen. Available platforms:" << std::endl;
+        std::cerr << prefix << "Platform not chosen. Available platforms:" << std::endl;
 
         if (platforms.size() == 0) {
-            std::cout << prefix << "No platforms found. Check your OpenCL installation. Aborting. Good Luck." << std::endl;
+            std::cerr << prefix << "No platforms found. Check your OpenCL installation. Aborting. Good Luck." << std::endl;
             exit(1);
         }
 
         for (uint i = 0; i < platforms.size(); i++)
-            std::cout << prefix << '[' << i << "] " << platforms[i].getInfo<CL_PLATFORM_NAME>() << std::endl;
+            std::cerr << prefix << '[' << i << "] " << platforms[i].getInfo<CL_PLATFORM_NAME>() << std::endl;
 
         platform_id = -1;
 
         while (platform_id >= platforms.size()) {
             if (platforms.size() > 1) {
-                std::cout << prefix << "Choose a platform [0-" << platforms.size() - 1 << "]: ";
+                std::cerr << prefix << "Choose a platform [0-" << platforms.size() - 1 << "]: ";
                 std::cin >> platform_id;
             }
             else platform_id = 0;
@@ -82,7 +82,7 @@ int main(int argc, char const *argv[]) {
         platform_id = (unsigned) std::stoi(platform_str);
 
         if (platforms.size() <= platform_id) {
-            std::cout << prefix << "Can not use platform #" << platform_id << " (number of platforms: "
+            std::cerr << prefix << "Can not use platform #" << platform_id << " (number of platforms: "
                       << platforms.size() << "). Aborting. Good luck." << std::endl;
             exit(1);
         }
@@ -91,7 +91,7 @@ int main(int argc, char const *argv[]) {
 
     cl::Platform platform = platforms[platform_id];
     platform_name = platform.getInfo<CL_PLATFORM_NAME>();
-    std::cout << prefix << "Using platform: " << platform_name << std::endl;
+    std::cerr << prefix << "Using platform: " << platform_name << std::endl;
 
     /****************************
      * PART 2: DEVICE SELECTION *
@@ -101,22 +101,22 @@ int main(int argc, char const *argv[]) {
 
     if (device_str == EMPTY_STRING) {
 
-        std::cout << prefix << "Device not chosen. Available platforms for " << platform_name << ":" << std::endl;
+        std::cerr << prefix << "Device not chosen. Available platforms for " << platform_name << ":" << std::endl;
 
         if (devices.size() == 0) {
-            std::cout << prefix << "No devices found on platform " << platform_name
+            std::cerr << prefix << "No devices found on platform " << platform_name
                       << ". Check your OpenCL installation. Aborting. Good Luck." << std::endl;
             exit(1);
         }
 
         for (uint i = 0; i < devices.size(); i++)
-            std::cout << prefix << '[' << i << "] " << devices[i].getInfo<CL_DEVICE_NAME>() << std::endl;
+            std::cerr << prefix << '[' << i << "] " << devices[i].getInfo<CL_DEVICE_NAME>() << std::endl;
 
         device_id = -1;
 
         while (device_id >= devices.size()) {
             if (devices.size() > 1) {
-                std::cout << prefix << "Choose a device [0-" << devices.size() - 1 << "]: ";
+                std::cerr << prefix << "Choose a device [0-" << devices.size() - 1 << "]: ";
                 std::cin >> device_id;
             }
             else device_id = 0;
@@ -129,7 +129,7 @@ int main(int argc, char const *argv[]) {
         device_id = (unsigned) std::stoi(device_str);
 
         if (devices.size() <= device_id) {
-            std::cout << prefix << "Can not use device #" << device_id << " (number of devices on selected platform: "
+            std::cerr << prefix << "Can not use device #" << device_id << " (number of devices on selected platform: "
                       << devices.size() << "). Aborting. Good luck." << std::endl;
             exit(1);
         }
@@ -138,7 +138,7 @@ int main(int argc, char const *argv[]) {
 
     cl::Device device = devices[device_id];
     device_name = device.getInfo<CL_DEVICE_NAME>();
-    std::cout << prefix << "Using device: " << device_name
+    std::cerr << prefix << "Using device: " << device_name
               << " (device OpenCL version: " << device.getInfo<CL_DEVICE_VERSION>() << ')' << std::endl;
 
     /************************************
@@ -147,7 +147,7 @@ int main(int argc, char const *argv[]) {
     cl::Context context({device});
     cl::Program program(context, loadProgram(kernel_file), false);
     if (program.build({device}) != CL_SUCCESS) {
-        std::cout << prefix << "Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+        std::cerr << prefix << "Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
         exit(1);
     }
     cl::CommandQueue queue(context, device);
@@ -160,7 +160,7 @@ int main(int argc, char const *argv[]) {
     /*** Step 1: identify kernel arguments ***/
     cl_uint nargs = kernel.getInfo<CL_KERNEL_NUM_ARGS>();
     for (cl_uint i = 0; i < nargs; i++)
-        std::cout << "Argument " << i << ": " << kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) << " type: "
+        std::cerr << "Argument " << i << ": " << kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) << " type: "
                                               << kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i) << " address qual: "
                                               << kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i) << " access qual: "
                                               << kernel.getArgInfo<CL_KERNEL_ARG_ACCESS_QUALIFIER>(i) << " type qual: "
@@ -204,7 +204,7 @@ int main(int argc, char const *argv[]) {
     queue.enqueueReadBuffer(d_c, CL_TRUE, 0, sizeof(int) * LENGTH, h_c.data());
 
     for(int i = 0; i < LENGTH; i++)
-        std::cout << "h_a: " << h_a[i] << " h_b: " << h_b[i] << " h_c: " << h_c[i] << std::endl;
+        std::cerr << "h_a: " << h_a[i] << " h_b: " << h_b[i] << " h_c: " << h_c[i] << std::endl;
     /*********************************************************************************************/
 
 
