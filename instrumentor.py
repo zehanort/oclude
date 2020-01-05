@@ -14,7 +14,7 @@ missingCurlyBracesAdderFlags = ['-fix',
                                 '-isystem', '/home/sotiris/projects/llvm-project/libclc/generic/include/']
 
 braceBreaker = 'clang-format'
-braceBreakerFlags = ['-style="{BreakBeforeBraces: Allman}"']
+braceBreakerFlags = ['-style="{BreakBeforeBraces: Allman, ColumnLimit: 0}"']
 
 instrumentationGetter = os.path.join('utils', 'instrumentation-parser')
 

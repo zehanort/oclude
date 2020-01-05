@@ -26,6 +26,13 @@ parser.add_argument('-s', '--size',
 	required=True
 )
 
+parser.add_argument('-w', '--work-groups',
+	type=int,
+	help='the total number of work groups',
+	required=True,
+	dest='work_groups'
+)
+
 parser.add_argument('-p', '--platform',
 	type=int,
 	help='the index of OpenCL platform to use (default: 0)',
@@ -48,6 +55,7 @@ hostcodeWrapperFlags = [
 	'-f', utils.tempfile,
 	'-k', args.kernel,
 	'-s', str(args.size),
+	'-w', str(args.work_groups),
 	'-p', str(args.platform),
 	'-d', str(args.device)
 ]
@@ -73,4 +81,25 @@ if (cmdout.returncode != 0):
 
 print(cmdout.stderr.decode('ascii'))
 
-os.remove(utils.tempfile)
+### STEP 3: parse hostcode-wrapper output and dump a oclgrind-like output ###
+instcounts = sorted(
+	[
+		(utils.llvm_instructions[instIdx], instCnt)
+		for instIdx, instCnt in map(
+			lambda x : map(int, x),
+			map(
+				lambda x : x.split(':'),
+				cmdout.stdout.decode('ascii').splitlines()
+			)
+		)
+		if instCnt != 0
+	],
+	key=lambda x : x[1],
+	reverse=True
+)
+
+print(f"Instructions executed for kernel '{args.kernel}':")
+for instName, instCnt in instcounts:
+	print(f'{instCnt : 16} - {instName}')
+
+# os.remove(utils.tempfile)
