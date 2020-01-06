@@ -80,11 +80,28 @@ if not os.path.exists(argv[1]):
 with open(argv[1], 'r') as f:
     src = utils.remove_comments(f.read())
 
+with open(utils.tempfile, 'w') as f:
+    f.write(src)
+
+####################################
+# step 2: add missing curly braces #
+####################################
+addMissingCurlyBracesCmd = ' '.join([missingCurlyBracesAdder, utils.tempfile, *missingCurlyBracesAdderFlags])
+stderr.write(f'{prompt} Adding missing curly braces: {addMissingCurlyBracesCmd}\n')
+
+cmdout = sp.run(addMissingCurlyBracesCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+if (cmdout.returncode != 0):
+    stderr.write(f'{prompt} Error while running {missingCurlyBracesAdder}: {cmdout.stderr.decode("ascii")}\n')
+    exit(cmdout.returncode)
+
 ##################################################
-# step 2: add hidden counter argument in kernels #
+# step 3: add hidden counter argument in kernels #
 ##################################################
 parser = OpenCLCParser()
-ast = parser.parse(src)
+
+with open(utils.tempfile, 'r') as f:
+    ast = parser.parse(f.read())
+
 funcCallsToEdit, kernelFuncs = [], []
 for f in ast:
     (funcCallsToEdit, kernelFuncs)[any(x.endswith('kernel') for x in f.decl.funcspec)].append(f.decl.name)
@@ -106,17 +123,6 @@ gen.visit_FuncCall = types.MethodType(new_visit_FuncCall, gen)
 
 with open(utils.tempfile, 'w') as f:
     f.write(gen.visit(ast))
-
-####################################
-# step 3: add missing curly braces #
-####################################
-addMissingCurlyBracesCmd = ' '.join([missingCurlyBracesAdder, utils.tempfile, *missingCurlyBracesAdderFlags])
-stderr.write(f'{prompt} Adding missing curly braces: {addMissingCurlyBracesCmd}\n')
-
-cmdout = sp.run(addMissingCurlyBracesCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} Error while running {missingCurlyBracesAdder}: {cmdout.stderr.decode("ascii")}\n')
-    exit(cmdout.returncode)
 
 #################################################
 # step 4: add new line before every curly brace #
