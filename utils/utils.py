@@ -16,10 +16,6 @@ templlvm = '.oclude_tmp_instr_ll.ll'
 
 hidden_counter_name_local = 'ocludeHiddenCounterLocal'
 hidden_counter_name_global = 'ocludeHiddenCounterGlobal'
-counterBufferLocal = f', __local uint *{hidden_counter_name_local}'
-counterBufferGlobal = f', __global uint *{hidden_counter_name_global}'
-# only the following will be exported and used by the instrumentor
-counterBuffers = counterBufferLocal + ' ' + counterBufferGlobal
 
 epilogue = f'''barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 if (get_local_id(0) == 0) {{
