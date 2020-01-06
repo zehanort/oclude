@@ -19,7 +19,11 @@ missingCurlyBracesAdderFlags = ['-fix',
                                 '-include', '/home/sotiris/projects/llvm-project/libclc/generic/include/clc/clc.h',
                                 '-isystem', '/home/sotiris/projects/llvm-project/libclc/generic/include/']
 
-### 2nd pass tools (python native) ###
+### 2nd pass tools ###
+braceBreaker = 'clang-format'
+braceBreakerFlags = ['-style="{BreakBeforeBraces: Allman, ColumnLimit: 0}"']
+
+### 3rd pass tools (python native) ###
 hiddenCounterLocalArgument = Decl(
     name=utils.hidden_counter_name_local,
     quals=['__local'],
@@ -53,10 +57,6 @@ hiddenCounterGlobalArgument = Decl(
     init=None,
     bitsize=None
 )
-
-### 3rd pass tools ###
-braceBreaker = 'clang-format'
-braceBreakerFlags = ['-style="{BreakBeforeBraces: Allman, ColumnLimit: 0}"']
 
 ### 4th pass tools ###
 instrumentationGetter = os.path.join('utils', 'instrumentation-parser')
