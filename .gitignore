@@ -4,5 +4,5 @@ hostcode-wrapper
 **/*.ll
 **/*.bc
 **/*.pyc
-lextab.py
-yacctab.py
+**/lextab.py
+**/yacctab.py

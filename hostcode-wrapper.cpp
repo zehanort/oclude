@@ -168,6 +168,7 @@ int main(int argc, char const *argv[]) {
     /************************************
      * PART 3: KERNEL ENVIRONMENT SETUP *
      ************************************/
+    print_message("Kernel name: " + kernel_name);
     cl::Context context({device});
     cl::Program program(context, loadProgram(kernel_file), false);
     if (program.build({device}) != CL_SUCCESS) {
@@ -184,10 +185,10 @@ int main(int argc, char const *argv[]) {
     /*** Step 1: identify kernel arguments ***/
     cl_uint nargs = kernel.getInfo<CL_KERNEL_NUM_ARGS>();
     for (cl_uint i = 0; i < nargs; i++)
-        print_message("Argument " + std::to_string(i) + ": " + kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) + '\t' +
-                                                   " type: " + kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i) + '\t' +
-                                           " address qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i)) + '\t' +
-                                            " access qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ACCESS_QUALIFIER>(i)));
+        print_message("Kernel arg " + std::to_string(i) + ": " + kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) + '\t' +
+                                                     " type: " + kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i) + '\t' +
+                                             " address qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i)) + '\t' +
+                                              " access qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ACCESS_QUALIFIER>(i)));
 
     /*** Step 2: create an object for each kernel argument ***/
     bool is_buffer;

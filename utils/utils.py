@@ -23,8 +23,8 @@ llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
                      'icmp', 'fcmp', 'phi', 'select', 'freeze', 'call', 'va_arg',
                      'landingpad', 'catchpad', 'cleanuppad']
 
-tempfile = '.oclude_tmp_instr_src.cl'
-templlvm = '.oclude_tmp_instr_ll.ll'
+tempfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.oclude_tmp_instr_src.cl')
+templlvm = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.oclude_tmp_instr_ll.ll')
 
 hidden_counter_name_local = 'ocludeHiddenCounterLocal'
 hidden_counter_name_global = 'ocludeHiddenCounterGlobal'
@@ -114,7 +114,7 @@ def remove_comments(src):
     # return the source string without empty lines
     return os.linesep.join([line for line in retsrc.splitlines() if line])
 
-def instrument_sourcefile(filename, instr_data_raw):
+def add_instrumentation_data_to_file(filename, instr_data_raw):
     '''
     returns a dictionary "line (int): code to add (string)"
     '''

@@ -45,6 +45,11 @@ parser.add_argument('-d', '--device',
 	default=0
 )
 
+parser.add_argument('-v', '--verbose',
+	help='toggle verbose output (default: false)',
+	action='store_true'
+)
+
 args = parser.parse_args()
 
 print_message = utils.MessagePrinter(argv[0])
@@ -60,7 +65,6 @@ if args.size // args.work_groups <= 8:
 	if input() != 'y':
 		exit(0)
 
-instrumentor = 'instrumentor.py'
 hostcodeWrapper = './hostcode-wrapper'
 hostcodeWrapperFlags = [
 	utils.tempfile,
@@ -73,19 +77,12 @@ hostcodeWrapperFlags = [
 
 ### STEP 1: instrument input source file ###
 ###  the final code ends up in tempfile  ###
-instrumentationCmd = ' '.join(['python3.7', instrumentor, args.infile])
-print_message(f'Intrumenting source code: {instrumentationCmd}')
-
-cmdout = sp.run(instrumentationCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-if (cmdout.returncode != 0):
-    print_message(f'Error while running {instrumentor}: {cmdout.stderr.decode("ascii")}', nl=False)
-    exit(cmdout.returncode)
-
-print_message(cmdout.stderr.decode('ascii'), prompt=False)
+print_message('Instrumenting source code')
+utils.instrument_file(args.infile, args.verbose)
 
 ### STEP 2: run the kernel ###
 kernelRunCmd = ' '.join([hostcodeWrapper, *hostcodeWrapperFlags])
-print_message(f'Running kernel {args.kernel} from file {args.infile}: {kernelRunCmd}')
+print_message(f'Running kernel {args.kernel} from file {args.infile}' + (f': {kernelRunCmd}' if args.verbose else ''))
 
 cmdout = sp.run(kernelRunCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
