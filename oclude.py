@@ -52,12 +52,12 @@ print_message = utils.MessagePrinter(argv[0])
 instrumentor = 'instrumentor.py'
 hostcodeWrapper = './hostcode-wrapper'
 hostcodeWrapperFlags = [
-	'-f', utils.tempfile,
-	'-k', args.kernel,
-	'-s', str(args.size),
-	'-w', str(args.work_groups),
-	'-p', str(args.platform),
-	'-d', str(args.device)
+	utils.tempfile,
+	args.kernel,
+	str(args.size),
+	str(args.work_groups),
+	str(args.platform),
+	str(args.device)
 ]
 
 ### STEP 1: instrument input source file ###

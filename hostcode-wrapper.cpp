@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <ctime>
 #include <random>
-#include "argparse.hpp"
 #ifdef __APPLE__
     #include <OpenCL/cl.hpp>
 #else
@@ -15,16 +14,19 @@
 
 class MessagePrinter {
 private:
-    std::string prompt;
+    std::string appname, prompt;
 public:
     MessagePrinter() {
         std::string filename = std::string(__FILE__);
-        std::string appname = filename.substr(0, filename.find_last_of("."));
+        appname = filename.substr(0, filename.find_last_of("."));
         prompt = "[" + appname + "] ";
     }
     void operator()(std::string message, bool nl=true) {
         std::cerr << prompt << message;
         if (nl) std::cerr << std::endl;
+    }
+    void usage() {
+        std::cerr << "usage: ./" << appname << ' ' << "<file> <kernel> <size> <work groups> [<platform>] [<device>]" << std::endl;
     }
 };
 
@@ -51,23 +53,21 @@ inline std::string loadProgram(std::string input) {
 
 int main(int argc, char const *argv[]) {
 
-    ArgumentParser parser;
+    if (argc < 5) {
+        print_message.usage();
+        exit(1);
+    }
 
-    parser.addArgument("-f", "--file", 1, false);
-    parser.addArgument("-k", "--kernel", 1, false);
-    parser.addArgument("-s", "--size", 1, false);
-    parser.addArgument("-w", "--work-groups", 1, false);
-    parser.addArgument("-p", "--platform", 1);
-    parser.addArgument("-d", "--device", 1);
-
-    parser.parse(argc, argv);
-
-    std::string kernel_file  = parser.retrieve<std::string>("file");
-    std::string kernel_name  = parser.retrieve<std::string>("kernel");
-    unsigned LENGTH          = (unsigned) std::stoi(parser.retrieve<std::string>("size"));
-    unsigned WORK_GROUPS     = (unsigned) std::stoi(parser.retrieve<std::string>("work-groups"));
-    std::string platform_str = parser.retrieve<std::string>("platform");
-    std::string device_str   = parser.retrieve<std::string>("device");
+    std::string kernel_file = argv[1];
+    std::string kernel_name = argv[2];
+    unsigned LENGTH = std::stoi(argv[3]);
+    unsigned WORK_GROUPS = std::stoi(argv[4]);
+    std::string platform_str;
+    if (argc > 5) platform_str = argv[5];
+    else          platform_str = EMPTY_STRING;
+    std::string device_str;
+    if (argc > 6) device_str = argv[6];
+    else          device_str = EMPTY_STRING;
     unsigned platform_id, device_id;
     std::string platform_name, device_name;
 
@@ -87,7 +87,7 @@ int main(int argc, char const *argv[]) {
         }
 
         for (uint i = 0; i < platforms.size(); i++)
-            print_message('[' + i + "] " + platforms[i].getInfo<CL_PLATFORM_NAME>());
+            print_message('[' + std::to_string(i) + "] " + platforms[i].getInfo<CL_PLATFORM_NAME>());
 
         platform_id = -1;
 

@@ -4,7 +4,7 @@ CC=gcc
 CFLAGS=
 
 CXX=g++
-CXXFLAGS=-std=c++17 -Wall -O3
+CXXFLAGS=-std=c++17 -Wall -Wno-ignored-attributes -Werror -O3
 LDFLAGS=-lOpenCL
 
 default: hostcode-wrapper
