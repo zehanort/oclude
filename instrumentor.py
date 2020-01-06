@@ -3,9 +3,15 @@ import subprocess as sp
 import re
 import os
 import utils
+import types
+
+from pycparserext.ext_c_parser import OpenCLCParser
+from pycparserext.ext_c_generator import OpenCLCGenerator
+from pycparser.c_ast import Decl, PtrDecl, TypeDecl, IdentifierType, ID
 
 prompt = '[' + argv[0].split('.')[0] +  ']'
 
+### 1st pass tools ###
 missingCurlyBracesAdder = 'clang-tidy'
 missingCurlyBracesAdderFlags = ['-fix',
                                 '-checks="readability-braces-around-statements"',
@@ -13,11 +19,49 @@ missingCurlyBracesAdderFlags = ['-fix',
                                 '-include', '/home/sotiris/projects/llvm-project/libclc/generic/include/clc/clc.h',
                                 '-isystem', '/home/sotiris/projects/llvm-project/libclc/generic/include/']
 
+### 2nd pass tools (python native) ###
+hiddenCounterLocalArgument = Decl(
+    name=utils.hidden_counter_name_local,
+    quals=['__local'],
+    storage=[],
+    funcspec=[],
+    type=PtrDecl(
+        quals=[],
+        type=TypeDecl(
+            declname=utils.hidden_counter_name_local,
+            quals=['__local'],
+            type=IdentifierType(names=['uint'])
+        )
+    ),
+    init=None,
+    bitsize=None
+)
+
+hiddenCounterGlobalArgument = Decl(
+    name=utils.hidden_counter_name_global,
+    quals=['__global'],
+    storage=[],
+    funcspec=[],
+    type=PtrDecl(
+        quals=[],
+        type=TypeDecl(
+            declname=utils.hidden_counter_name_global,
+            quals=['__global'],
+            type=IdentifierType(names=['uint'])
+        )
+    ),
+    init=None,
+    bitsize=None
+)
+
+### 3rd pass tools ###
 braceBreaker = 'clang-format'
 braceBreakerFlags = ['-style="{BreakBeforeBraces: Allman, ColumnLimit: 0}"']
 
+### 4th pass tools ###
 instrumentationGetter = os.path.join('utils', 'instrumentation-parser')
 
+### 5th pass tools ###
 cl2llCompiler = 'clang'
 cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm',
                       '-S', '-cl-std=CL2.0', '-Xclang', '-finclude-default-header']
@@ -39,42 +83,32 @@ with open(argv[1], 'r') as f:
 ##################################################
 # step 2: add hidden counter argument in kernels #
 ##################################################
-src = re.findall(r'\S+|\n', src)
-instrsrc = ''
+parser = OpenCLCParser()
+ast = parser.parse(src)
+funcCallsToEdit = [f.decl.name for f in ast if not any(x.endswith('kernel') for x in f.decl.funcspec)]
+kernelFuncs = list(set(f.decl.name for f in ast) - set(funcCallsToEdit))
 
-cnt = 0
-idx = 0
-kernel_mode = False
-while idx < len(src):
-    word = src[idx]
-    ### inside a kernel function header ###
-    if not kernel_mode:
-        if (word == 'kernel' or word == '__kernel') and src[idx+1] == 'void':
-            kernel_mode = True
-            cnt = 0
-        idx += 1
-        instrsrc += word + ' '
-    ### not inside a kernel function header ###
-    else:
-        for j, c in enumerate(word):
-            if c == '(':
-                cnt += 1
-            elif c == ')':
-                cnt -= 1
-                # reached end of kernel declaration?
-                if (cnt == 0):
-                    kernel_mode = False
-                    instrsrc += utils.counterBuffers + word[j:]
-                    break
-            instrsrc += c + (' ' if j == len(word) - 1 else '')
-        idx += 1
+for func in ast:
+    func.decl.type.args.params.append(hiddenCounterLocalArgument)
+    if func.decl.name in kernelFuncs:
+        func.decl.type.args.params.append(hiddenCounterGlobalArgument)
+
+gen = OpenCLCGenerator()
+old_visit_FuncCall = gen.visit_FuncCall
+
+def new_visit_FuncCall(self, n):
+    if n.name.name in funcCallsToEdit:
+        x = n.args.exprs.append(ID(utils.hidden_counter_name_local))
+    return old_visit_FuncCall(n)
+
+gen.visit_FuncCall = types.MethodType(new_visit_FuncCall, gen)
+
+with open(utils.tempfile, 'w') as f:
+    f.write(gen.visit(ast))
 
 ####################################
 # step 3: add missing curly braces #
 ####################################
-with open(utils.tempfile, 'w') as f:
-    f.write(instrsrc)
-
 addMissingCurlyBracesCmd = ' '.join([missingCurlyBracesAdder, utils.tempfile, *missingCurlyBracesAdderFlags])
 stderr.write(f'{prompt} Adding missing curly braces: {addMissingCurlyBracesCmd}\n')
 

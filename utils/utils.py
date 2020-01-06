@@ -21,11 +21,11 @@ counterBufferGlobal = f', __global uint *{hidden_counter_name_global}'
 # only the following will be exported and used by the instrumentor
 counterBuffers = counterBufferLocal + ' ' + counterBufferGlobal
 
-epilogue = f'''if (get_local_id(0) == 0) {{
+epilogue = f'''barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+if (get_local_id(0) == 0) {{
     int glid = get_group_id(0) * {len(llvm_instructions)};
     for (int i = glid; i < glid + {len(llvm_instructions)}; i++)
         {hidden_counter_name_global}[i] = {hidden_counter_name_local}[i - glid];
-        // {hidden_counter_name_global}[i] = get_group_id(0);
 }}
 '''
 
