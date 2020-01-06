@@ -79,7 +79,7 @@ if (cmdout.returncode != 0):
     stderr.write(f'{prompt} Error while running {hostcodeWrapper}: {cmdout.stderr.decode("ascii")}\n')
     exit(cmdout.returncode)
 
-print(cmdout.stderr.decode('ascii'))
+stderr.write(cmdout.stderr.decode('ascii') + '\n')
 
 ### STEP 3: parse hostcode-wrapper output and dump a oclgrind-like output ###
 instcounts = sorted(

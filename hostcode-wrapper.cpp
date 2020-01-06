@@ -200,17 +200,9 @@ int main(int argc, char const *argv[]) {
         is_buffer = (*(argtype.end() - 2) == '*');
 
         // handle oclude counters in a special manner
-        if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind("ocludeHiddenCounterLocal", 0) == 0) {
-            // cl::Buffer localCounterBuffer = cl::Buffer(context, begin(kernel_arg), end(kernel_arg), false);
-            // queue.enqueueFillBuffer(localCounterBuffer, 0, 0, sizeof(cl_uint));
-            // kernel.setArg(i, cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * 66, std::get<v_uint>(kernel_args[i]).data()));
+        if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind("ocludeHiddenCounterLocal", 0) == 0)
             kernel.setArg(i, cl::Local(sizeof(cl_uint) * 66));
-        }
         else if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind("ocludeHiddenCounterGlobal", 0) == 0) {
-            // v_uint kernel_arg(66 * WORK_GROUPS);
-            // kernel_args.push_back(kernel_arg);
-            // counterBuffer = cl::Buffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * 66 * WORK_GROUPS);
-            // kernel.setArg(i, counterBuffer);
             kernel_args.push_back(v_uint(66 * WORK_GROUPS));
             for (unsigned j = 0; j < 66 * WORK_GROUPS; j++)
                 std::get<v_uint>(kernel_args.back())[j] = 0;
@@ -262,24 +254,13 @@ int main(int argc, char const *argv[]) {
         }
     }
 
-    // std::cout << "HI 1" << std::endl;
     /*** Step 3: run kernel ***/
     std::cerr << prefix << "Enqueuing kernel with Global NDRange = " << LENGTH << " and Local NDRange = " << LENGTH / WORK_GROUPS << std::endl;
     queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(LENGTH), cl::NDRange(LENGTH / WORK_GROUPS));
-    // std::cout << "HI 2" << std::endl;
 
     /*** Step 4: read counter buffer ***/
     v_uint globalCounter(66 * WORK_GROUPS);
-    // std::cout << "HI 3" << std::endl;
     queue.enqueueReadBuffer(argumentBuffers[nargs-1], CL_TRUE, 0, sizeof(cl_uint) * 66 * WORK_GROUPS, globalCounter.data());
-    // std::cout << "HI 4" << std::endl;
-
-    // std::cout << "===============" << std::endl;
-
-    // for (unsigned i = 0; i < globalCounter.size(); i++)
-    //     std::cout << i <<": " << globalCounter[i] << std::endl;
-
-    // std::cout << "===============" << std::endl;
 
     /*** Step 5: aggregate instruction counts across work groups ***/
     v_uint finalCounter(66, 0);
@@ -290,34 +271,6 @@ int main(int argc, char const *argv[]) {
     /*** Step 6: report instruction counts ***/
     for (unsigned i = 0; i < finalCounter.size(); i++)
         std::cout << i << ": " << finalCounter[i] << std::endl;
-
-    /*** TESTING VADD FOR NOW (WORKING EXAMPLE) ***/
-
-    /*********************************************************************************************/
-    // int LENGTH = input_size;
-
-    // std::vector<int> h_a(LENGTH);  // a vector
-    // std::vector<int> h_b(LENGTH);  // b vector
-    // std::vector<int> h_c(LENGTH);  // c = a + b, from compute device
-
-    // for(int i = 0; i < LENGTH; i++) h_a[i] = h_b[i] = 2*i;
-
-    // cl::Buffer d_a = cl::Buffer(context, begin(h_a), end(h_a), true);
-    // cl::Buffer d_b = cl::Buffer(context, begin(h_b), end(h_b), true);
-    // cl::Buffer d_c = cl::Buffer(context, CL_MEM_WRITE_ONLY, sizeof(int) * LENGTH);
-
-    // kernel.setArg(0, d_a);
-    // kernel.setArg(1, d_b);
-    // kernel.setArg(2, d_c);
-    // kernel.setArg(3, LENGTH);
-
-    // queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(LENGTH), cl::NullRange);
-
-    // queue.enqueueReadBuffer(d_c, CL_TRUE, 0, sizeof(int) * LENGTH, h_c.data());
-
-    // for(int i = 0; i < LENGTH; i++)
-    //     std::cerr << "h_a: " << h_a[i] << " h_b: " << h_b[i] << " h_c: " << h_c[i] << std::endl;
-    /*********************************************************************************************/
 
     return 0;
 }

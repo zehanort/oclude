@@ -85,8 +85,9 @@ with open(argv[1], 'r') as f:
 ##################################################
 parser = OpenCLCParser()
 ast = parser.parse(src)
-funcCallsToEdit = [f.decl.name for f in ast if not any(x.endswith('kernel') for x in f.decl.funcspec)]
-kernelFuncs = list(set(f.decl.name for f in ast) - set(funcCallsToEdit))
+funcCallsToEdit, kernelFuncs = [], []
+for f in ast:
+    (funcCallsToEdit, kernelFuncs)[any(x.endswith('kernel') for x in f.decl.funcspec)].append(f.decl.name)
 
 for func in ast:
     func.decl.type.args.params.append(hiddenCounterLocalArgument)
