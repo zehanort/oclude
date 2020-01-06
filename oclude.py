@@ -49,6 +49,17 @@ args = parser.parse_args()
 
 print_message = utils.MessagePrinter(argv[0])
 
+# some sanity checks
+if args.size < args.work_groups or args.size % args.work_groups != 0:
+	print_message('size must be a multiple of work_groups')
+	exit(1)
+
+if args.size // args.work_groups <= 8:
+	print_message('WARNING: Size not being greater than 8 * work_groups will most likely lead to invalid results.')
+	print_message('Proceed? [y/N] ', nl=False)
+	if input() != 'y':
+		exit(0)
+
 instrumentor = 'instrumentor.py'
 hostcodeWrapper = './hostcode-wrapper'
 hostcodeWrapperFlags = [
@@ -67,7 +78,7 @@ print_message(f'Intrumenting source code: {instrumentationCmd}')
 
 cmdout = sp.run(instrumentationCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    print_message(f'Error while running {instrumentor}: {cmdout.stderr.decode("ascii")}')
+    print_message(f'Error while running {instrumentor}: {cmdout.stderr.decode("ascii")}', nl=False)
     exit(cmdout.returncode)
 
 print_message(cmdout.stderr.decode('ascii'), prompt=False)
@@ -78,7 +89,7 @@ print_message(f'Running kernel {args.kernel} from file {args.infile}: {kernelRun
 
 cmdout = sp.run(kernelRunCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    print_message(f'Error while running {hostcodeWrapper}: {cmdout.stderr.decode("ascii")}')
+    print_message(f'Error while running {hostcodeWrapper}: {cmdout.stderr.decode("ascii")}', nl=False)
     exit(cmdout.returncode)
 
 print_message(cmdout.stderr.decode('ascii'), prompt=False)

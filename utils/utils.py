@@ -4,9 +4,11 @@ from sys import stderr
 class MessagePrinter(object):
     def __init__(self, arg):
         self.prompt = '[' + arg.split('.')[0] +  ']'
-    def __call__(self, message, prompt=True):
-        if prompt:
+    def __call__(self, message, prompt=True, nl=True):
+        if prompt and nl:
             stderr.write(f'{self.prompt} {message}\n')
+        elif prompt:
+            stderr.write(f'{self.prompt} {message}')
         else:
             stderr.write(message)
 
