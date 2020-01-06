@@ -47,7 +47,7 @@ parser.add_argument('-d', '--device',
 
 args = parser.parse_args()
 
-prompt = '[' + argv[0].split('.')[0] +  ']'
+print_message = utils.MessagePrinter(argv[0])
 
 instrumentor = 'instrumentor.py'
 hostcodeWrapper = './hostcode-wrapper'
@@ -63,23 +63,25 @@ hostcodeWrapperFlags = [
 ### STEP 1: instrument input source file ###
 ###  the final code ends up in tempfile  ###
 instrumentationCmd = ' '.join(['python3.7', instrumentor, args.infile])
-stderr.write(f'{prompt} Intrumenting source code: {instrumentationCmd}\n')
+print_message(f'Intrumenting source code: {instrumentationCmd}')
 
 cmdout = sp.run(instrumentationCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} Error while running {instrumentor}: {cmdout.stderr.decode("ascii")}\n')
+    print_message(f'Error while running {instrumentor}: {cmdout.stderr.decode("ascii")}')
     exit(cmdout.returncode)
+
+print_message(cmdout.stderr.decode('ascii'), prompt=False)
 
 ### STEP 2: run the kernel ###
 kernelRunCmd = ' '.join([hostcodeWrapper, *hostcodeWrapperFlags])
-stderr.write(f'{prompt} Running kernel {args.kernel} from file {args.infile}: {kernelRunCmd}\n')
+print_message(f'Running kernel {args.kernel} from file {args.infile}: {kernelRunCmd}')
 
 cmdout = sp.run(kernelRunCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} Error while running {hostcodeWrapper}: {cmdout.stderr.decode("ascii")}\n')
+    print_message(f'Error while running {hostcodeWrapper}: {cmdout.stderr.decode("ascii")}')
     exit(cmdout.returncode)
 
-stderr.write(cmdout.stderr.decode('ascii') + '\n')
+print_message(cmdout.stderr.decode('ascii'), prompt=False)
 
 ### STEP 3: parse hostcode-wrapper output and dump a oclgrind-like output ###
 instcounts = sorted(
@@ -97,6 +99,8 @@ instcounts = sorted(
 	key=lambda x : x[1],
 	reverse=True
 )
+
+print_message('Kernel run completed successfully')
 
 print(f"Instructions executed for kernel '{args.kernel}':")
 for instName, instCnt in instcounts:

@@ -9,7 +9,7 @@ from pycparserext.ext_c_parser import OpenCLCParser
 from pycparserext.ext_c_generator import OpenCLCGenerator
 from pycparser.c_ast import Decl, PtrDecl, TypeDecl, IdentifierType, ID
 
-prompt = '[' + argv[0].split('.')[0] +  ']'
+print_message = utils.MessagePrinter(argv[0])
 
 ### 1st pass tools ###
 missingCurlyBracesAdder = 'clang-tidy'
@@ -67,11 +67,11 @@ cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm',
                       '-S', '-cl-std=CL2.0', '-Xclang', '-finclude-default-header']
 
 if len(argv) < 2:
-    stderr.write(f'{prompt} Error: no input file provided\n')
+    print_message('Error: no input file provided')
     exit(1)
 
 if not os.path.exists(argv[1]):
-    stderr.write(f'{prompt} Error: {argv[1]} is not a file\n')
+    print_message(f'Error: {argv[1]} is not a file')
     exit(1)
 
 ###########################
@@ -87,11 +87,11 @@ with open(utils.tempfile, 'w') as f:
 # step 2: add missing curly braces #
 ####################################
 addMissingCurlyBracesCmd = ' '.join([missingCurlyBracesAdder, utils.tempfile, *missingCurlyBracesAdderFlags])
-stderr.write(f'{prompt} Adding missing curly braces: {addMissingCurlyBracesCmd}\n')
+print_message(f'Adding missing curly braces: {addMissingCurlyBracesCmd}')
 
 cmdout = sp.run(addMissingCurlyBracesCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} Error while running {missingCurlyBracesAdder}: {cmdout.stderr.decode("ascii")}\n')
+    print_message(f'Error while running {missingCurlyBracesAdder}: {cmdout.stderr.decode("ascii")}')
     exit(cmdout.returncode)
 
 ##################################################
@@ -128,11 +128,11 @@ with open(utils.tempfile, 'w') as f:
 # step 4: add new line before every curly brace #
 #################################################
 braceBreakerCmd = ' '.join([braceBreaker, *braceBreakerFlags, utils.tempfile])
-stderr.write(f'{prompt} Breaking curly braces: {braceBreakerCmd}\n')
+print_message(f'Breaking curly braces: {braceBreakerCmd}')
 
 cmdout = sp.run(braceBreakerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} Error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}\n')
+    print_message(f'Error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}')
     exit(cmdout.returncode)
 
 with open(utils.tempfile, 'w') as f:
@@ -146,19 +146,19 @@ with open(utils.tempfile, 'w') as f:
 # after compiling source to LLVM bitcode
 
 cl2llCompilerCmd = ' '.join([cl2llCompiler, *cl2llCompilerFlags, '-o', utils.templlvm, utils.tempfile])
-stderr.write(f'{prompt} Compiling source to LLVM bitcode: {cl2llCompilerCmd}\n')
+print_message(f'Compiling source to LLVM bitcode: {cl2llCompilerCmd}')
 
 cmdout = sp.run(cl2llCompilerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} Error while running {cl2llCompiler}: {cmdout.stderr.decode("ascii")}\n')
+    print_message(f'Error while running {cl2llCompiler}: {cmdout.stderr.decode("ascii")}')
     exit(cmdout.returncode)
 
 instrumentationGetterCmd = ' '.join([instrumentationGetter, utils.templlvm])
-stderr.write(f'{prompt} Instrumenting source: {instrumentationGetterCmd}\n')
+print_message(f'Instrumenting source: {instrumentationGetterCmd}')
 
 cmdout = sp.run(instrumentationGetterCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} Error while running {instrumentationGetter}: {cmdout.stderr.decode("ascii")}\n')
+    print_message(f'Error while running {instrumentationGetter}: {cmdout.stderr.decode("ascii")}')
     exit(cmdout.returncode)
 
 os.remove(utils.templlvm)
@@ -169,18 +169,18 @@ instrumentation_data = cmdout.stdout.decode('ascii')
 utils.instrument_sourcefile(utils.tempfile, instrumentation_data)
 
 # instrumentation is done! Congrats!
-stderr.write(f'{prompt} Prettifing instrumented source code: {braceBreakerCmd}\n')
+print_message(f'Prettifing instrumented source code: {braceBreakerCmd}')
 
 cmdout = sp.run(braceBreakerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
 if (cmdout.returncode != 0):
-    stderr.write(f'{prompt} Error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}\n')
+    print_message(f'Error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}')
     exit(cmdout.returncode)
 
 with open(utils.tempfile, 'w') as f:
     f.write(cmdout.stdout.decode('ascii'))
 
-stderr.write(f'{prompt} Final instrumented source code for inspection:\n')
+print_message('Final instrumented source code for inspection:')
 with open(utils.tempfile, 'r') as f:
     print(f.read())
 
-stderr.write(f'{prompt} Intrumentation completed successfully\n')
+print_message('Intrumentation completed successfully')

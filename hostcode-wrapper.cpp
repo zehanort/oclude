@@ -13,7 +13,22 @@
 
 #define EMPTY_STRING (std::string(""))
 
-std::string prefix;
+class MessagePrinter {
+private:
+    std::string prompt;
+public:
+    MessagePrinter() {
+        std::string filename = std::string(__FILE__);
+        std::string appname = filename.substr(0, filename.find_last_of("."));
+        prompt = "[" + appname + "] ";
+    }
+    void operator()(std::string message, bool nl=true) {
+        std::cerr << prompt << message;
+        if (nl) std::cerr << std::endl;
+    }
+};
+
+MessagePrinter print_message;
 
 // buffer args
 using v_int = std::vector<cl_int>;
@@ -25,7 +40,7 @@ using kernel_args_t = std::vector<std::variant<cl_int, cl_uint, cl_float, v_int,
 inline std::string loadProgram(std::string input) {
     std::ifstream stream(input.c_str());
     if (!stream.is_open()) {
-        std::cerr << prefix << "Cannot open file: " << input << std::endl;
+        print_message("Cannot open file: " + input);
         exit(1);
     }
     return std::string(
@@ -47,10 +62,6 @@ int main(int argc, char const *argv[]) {
 
     parser.parse(argc, argv);
 
-    std::string filename = std::string(__FILE__);
-    std::string appname = filename.substr(0, filename.find_last_of("."));
-    prefix = "[" + appname + "] ";
-
     std::string kernel_file  = parser.retrieve<std::string>("file");
     std::string kernel_name  = parser.retrieve<std::string>("kernel");
     unsigned LENGTH          = (unsigned) std::stoi(parser.retrieve<std::string>("size"));
@@ -68,21 +79,21 @@ int main(int argc, char const *argv[]) {
 
     if (platform_str == EMPTY_STRING) {
 
-        std::cerr << prefix << "Platform not chosen. Available platforms:" << std::endl;
+        print_message("Platform not chosen. Available platforms:");
 
         if (platforms.size() == 0) {
-            std::cerr << prefix << "No platforms found. Check your OpenCL installation. Aborting. Good Luck." << std::endl;
+            print_message("No platforms found. Check your OpenCL installation. Aborting. Good Luck.");
             exit(1);
         }
 
         for (uint i = 0; i < platforms.size(); i++)
-            std::cerr << prefix << '[' << i << "] " << platforms[i].getInfo<CL_PLATFORM_NAME>() << std::endl;
+            print_message('[' + i + "] " + platforms[i].getInfo<CL_PLATFORM_NAME>());
 
         platform_id = -1;
 
         while (platform_id >= platforms.size()) {
             if (platforms.size() > 1) {
-                std::cerr << prefix << "Choose a platform [0-" << platforms.size() - 1 << "]: ";
+                print_message("Choose a platform [0-" + std::to_string(platforms.size() - 1) + "]: ", false);
                 std::cin >> platform_id;
             }
             else platform_id = 0;
@@ -95,8 +106,8 @@ int main(int argc, char const *argv[]) {
         platform_id = (unsigned) std::stoi(platform_str);
 
         if (platforms.size() <= platform_id) {
-            std::cerr << prefix << "Can not use platform #" << platform_id << " (number of platforms: "
-                      << platforms.size() << "). Aborting. Good luck." << std::endl;
+            print_message("Can not use platform #" + std::to_string(platform_id) + " (number of platforms: "
+                      + std::to_string(platforms.size()) + "). Aborting. Good luck.");
             exit(1);
         }
 
@@ -104,7 +115,7 @@ int main(int argc, char const *argv[]) {
 
     cl::Platform platform = platforms[platform_id];
     platform_name = platform.getInfo<CL_PLATFORM_NAME>();
-    std::cerr << prefix << "Using platform: " << platform_name << std::endl;
+    print_message("Using platform: " + platform_name);
 
     /****************************
      * PART 2: DEVICE SELECTION *
@@ -114,22 +125,22 @@ int main(int argc, char const *argv[]) {
 
     if (device_str == EMPTY_STRING) {
 
-        std::cerr << prefix << "Device not chosen. Available platforms for " << platform_name << ":" << std::endl;
+        print_message("Device not chosen. Available platforms for " + platform_name + ":");
 
         if (devices.size() == 0) {
-            std::cerr << prefix << "No devices found on platform " << platform_name
-                      << ". Check your OpenCL installation. Aborting. Good Luck." << std::endl;
+            print_message("No devices found on platform " + platform_name +
+                          ". Check your OpenCL installation. Aborting. Good Luck.");
             exit(1);
         }
 
         for (uint i = 0; i < devices.size(); i++)
-            std::cerr << prefix << '[' << i << "] " << devices[i].getInfo<CL_DEVICE_NAME>() << std::endl;
+            print_message("[" + std::to_string(i) + "] " + devices[i].getInfo<CL_DEVICE_NAME>());
 
         device_id = -1;
 
         while (device_id >= devices.size()) {
             if (devices.size() > 1) {
-                std::cerr << prefix << "Choose a device [0-" << devices.size() - 1 << "]: ";
+                print_message("Choose a device [0-" + std::to_string(devices.size() - 1) + "]: ", false);
                 std::cin >> device_id;
             }
             else device_id = 0;
@@ -142,8 +153,8 @@ int main(int argc, char const *argv[]) {
         device_id = (unsigned) std::stoi(device_str);
 
         if (devices.size() <= device_id) {
-            std::cerr << prefix << "Can not use device #" << device_id << " (number of devices on selected platform: "
-                      << devices.size() << "). Aborting. Good luck." << std::endl;
+            print_message("Can not use device #" + std::to_string(device_id) + " (number of devices on selected platform: " +
+                          std::to_string(devices.size()) + "). Aborting. Good luck.");
             exit(1);
         }
 
@@ -151,8 +162,8 @@ int main(int argc, char const *argv[]) {
 
     cl::Device device = devices[device_id];
     device_name = device.getInfo<CL_DEVICE_NAME>();
-    std::cerr << prefix << "Using device: " << device_name
-              << " (device OpenCL version: " << device.getInfo<CL_DEVICE_VERSION>() << ')' << std::endl;
+    print_message("Using device: " + device_name +
+                  " (device OpenCL version: " + device.getInfo<CL_DEVICE_VERSION>() + ")");
 
     /************************************
      * PART 3: KERNEL ENVIRONMENT SETUP *
@@ -160,7 +171,7 @@ int main(int argc, char const *argv[]) {
     cl::Context context({device});
     cl::Program program(context, loadProgram(kernel_file), false);
     if (program.build({device}) != CL_SUCCESS) {
-        std::cerr << prefix << "Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+        print_message("Error building: " + program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device));
         exit(1);
     }
     cl::CommandQueue queue(context, device);
@@ -173,11 +184,10 @@ int main(int argc, char const *argv[]) {
     /*** Step 1: identify kernel arguments ***/
     cl_uint nargs = kernel.getInfo<CL_KERNEL_NUM_ARGS>();
     for (cl_uint i = 0; i < nargs; i++)
-        std::cerr << "Argument " << i << ": " << kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) << " type: "
-                                              << kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i) << " address qual: "
-                                              << kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i) << " access qual: "
-                                              << kernel.getArgInfo<CL_KERNEL_ARG_ACCESS_QUALIFIER>(i) << " type qual: "
-                                              << kernel.getArgInfo<CL_KERNEL_ARG_TYPE_QUALIFIER>(i) << std::endl;
+        print_message("Argument " + std::to_string(i) + ": " + kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) + '\t' +
+                                                   " type: " + kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i) + '\t' +
+                                           " address qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i)) + '\t' +
+                                            " access qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ACCESS_QUALIFIER>(i)));
 
     /*** Step 2: create an object for each kernel argument ***/
     bool is_buffer;
@@ -255,7 +265,7 @@ int main(int argc, char const *argv[]) {
     }
 
     /*** Step 3: run kernel ***/
-    std::cerr << prefix << "Enqueuing kernel with Global NDRange = " << LENGTH << " and Local NDRange = " << LENGTH / WORK_GROUPS << std::endl;
+    print_message("Enqueuing kernel with Global NDRange = " + std::to_string(LENGTH) + " and Local NDRange = " + std::to_string(LENGTH / WORK_GROUPS));
     queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(LENGTH), cl::NDRange(LENGTH / WORK_GROUPS));
 
     /*** Step 4: read counter buffer ***/

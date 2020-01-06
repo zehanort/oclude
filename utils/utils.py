@@ -1,4 +1,14 @@
 import os
+from sys import stderr
+
+class MessagePrinter(object):
+    def __init__(self, arg):
+        self.prompt = '[' + arg.split('.')[0] +  ']'
+    def __call__(self, message, prompt=True):
+        if prompt:
+            stderr.write(f'{self.prompt} {message}\n')
+        else:
+            stderr.write(message)
 
 llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
                      'fneg', 'fadd', 'fsub', 'fmul', 'fdiv', 'frem', 'shl',
