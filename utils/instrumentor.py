@@ -1,6 +1,4 @@
-from sys import argv, stderr
 import subprocess as sp
-import re
 import os
 import utils
 import types

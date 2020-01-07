@@ -1,6 +1,5 @@
 import argparse
 import subprocess as sp
-from sys import argv, stderr
 import os
 import utils
 
@@ -52,7 +51,7 @@ parser.add_argument('-v', '--verbose',
 
 args = parser.parse_args()
 
-print_message = utils.MessagePrinter(argv[0])
+print_message = utils.MessagePrinter(__file__.split(os.sep)[-1])
 
 # some sanity checks
 if args.size < args.work_groups or args.size % args.work_groups != 0:
@@ -108,10 +107,10 @@ instcounts = sorted(
 	reverse=True
 )
 
+os.remove(utils.tempfile)
+
 print_message('Kernel run completed successfully')
 
 print(f"Instructions executed for kernel '{args.kernel}':")
 for instName, instCnt in instcounts:
 	print(f'{instCnt : 16} - {instName}')
-
-# os.remove(utils.tempfile)
