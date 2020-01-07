@@ -5,9 +5,12 @@ import types
 
 from pycparserext.ext_c_parser import OpenCLCParser
 from pycparserext.ext_c_generator import OpenCLCGenerator
-from pycparser.c_ast import Decl, PtrDecl, TypeDecl, IdentifierType, ID
+from pycparser.c_ast import Decl, PtrDecl, TypeDecl, IdentifierType, ID, FuncDef
 
 print_message = utils.MessagePrinter(__file__.split(os.sep)[-1])
+
+### 0 pass tools (preproccessor) ###
+preproccessor = 'cpp'
 
 ### 1st pass tools ###
 missingCurlyBracesAdder = 'clang-tidy'
@@ -70,14 +73,18 @@ def instrument_file(file, verbose=False):
         print_message(f'Error: {file} is not a file')
         exit(1)
 
-    ###########################
-    # step 1: remove comments #
-    ###########################
-    with open(file, 'r') as f:
-        src = utils.remove_comments(f.read())
+    ########################################
+    # step 1: remove comments / preprocess #
+    ########################################
+    preproccessingCmd = ' '.join([preproccessor, file])
+    print_message('Preproccessing source file' + (f': {preproccessingCmd}' if verbose else ''))
+    cmdout = sp.run(preproccessingCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+    if (cmdout.returncode != 0):
+        print_message(f'Error while running {preproccessor}: {cmdout.stderr.decode("ascii")}')
+        exit(cmdout.returncode)
 
     with open(utils.tempfile, 'w') as f:
-        f.write(src)
+        f.writelines(filter(lambda line : line and not line.startswith('#'), cmdout.stdout.decode('ascii').splitlines()))
 
     ####################################
     # step 2: add missing curly braces #
@@ -98,11 +105,13 @@ def instrument_file(file, verbose=False):
     with open(utils.tempfile, 'r') as f:
         ast = parser.parse(f.read())
 
+    ASTfunctions = list(filter(lambda x : isinstance(x, FuncDef), ast))
     funcCallsToEdit, kernelFuncs = [], []
-    for f in ast:
+
+    for f in ASTfunctions:
         (funcCallsToEdit, kernelFuncs)[any(x.endswith('kernel') for x in f.decl.funcspec)].append(f.decl.name)
 
-    for func in ast:
+    for func in ASTfunctions:
         func.decl.type.args.params.append(hiddenCounterLocalArgument)
         if func.decl.name in kernelFuncs:
             func.decl.type.args.params.append(hiddenCounterGlobalArgument)
