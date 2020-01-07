@@ -10,7 +10,9 @@
     #include <CL/cl.hpp>
 #endif
 
-#define EMPTY_STRING (std::string(""))
+#define OCLUDE_COUNTER_LOCAL  (std::string("ocludeHiddenCounterLocal"))
+#define OCLUDE_COUNTER_GLOBAL (std::string("ocludeHiddenCounterGlobal"))
+#define EMPTY_STRING          (std::string(""))
 
 class MessagePrinter {
 private:
@@ -184,11 +186,15 @@ int main(int argc, char const *argv[]) {
 
     /*** Step 1: identify kernel arguments ***/
     cl_uint nargs = kernel.getInfo<CL_KERNEL_NUM_ARGS>();
-    for (cl_uint i = 0; i < nargs; i++)
+    for (cl_uint i = 0; i < nargs; i++) {
+        if ((kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_LOCAL, 0) == 0) ||
+            (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_GLOBAL, 0) == 0))
+            continue;
         print_message("Kernel arg " + std::to_string(i) + ": " + kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) + '\t' +
                                                      " type: " + kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i) + '\t' +
                                              " address qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i)) + '\t' +
                                               " access qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ACCESS_QUALIFIER>(i)));
+    }
 
     /*** Step 2: create an object for each kernel argument ***/
     bool is_buffer;
@@ -211,9 +217,9 @@ int main(int argc, char const *argv[]) {
         is_buffer = (*(argtype.end() - 2) == '*');
 
         // handle oclude counters in a special manner
-        if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind("ocludeHiddenCounterLocal", 0) == 0)
+        if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_LOCAL, 0) == 0)
             kernel.setArg(i, cl::Local(sizeof(cl_uint) * 66));
-        else if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind("ocludeHiddenCounterGlobal", 0) == 0) {
+        else if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_GLOBAL, 0) == 0) {
             kernel_args.push_back(v_uint(66 * WORK_GROUPS));
             for (unsigned j = 0; j < 66 * WORK_GROUPS; j++)
                 std::get<v_uint>(kernel_args.back())[j] = 0;

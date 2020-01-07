@@ -9,8 +9,8 @@ from pycparser.c_ast import Decl, PtrDecl, TypeDecl, IdentifierType, ID, FuncDef
 
 print_message = utils.MessagePrinter(__file__.split(os.sep)[-1])
 
-### 0 pass tools (preproccessor) ###
-preproccessor = 'cpp'
+### 0 pass tools (preprocessor) ###
+preprocessor = 'cpp'
 
 ### 1st pass tools ###
 missingCurlyBracesAdder = 'clang-tidy'
@@ -76,11 +76,11 @@ def instrument_file(file, verbose=False):
     ########################################
     # step 1: remove comments / preprocess #
     ########################################
-    preproccessingCmd = ' '.join([preproccessor, file])
-    print_message('Preproccessing source file' + (f': {preproccessingCmd}' if verbose else ''))
-    cmdout = sp.run(preproccessingCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+    preprocessingCmd = ' '.join([preprocessor, file])
+    print_message('preprocessing source file' + (f': {preprocessingCmd}' if verbose else ''))
+    cmdout = sp.run(preprocessingCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
     if (cmdout.returncode != 0):
-        print_message(f'Error while running {preproccessor}: {cmdout.stderr.decode("ascii")}')
+        print_message(f'Error while running {preprocessor}: {cmdout.stderr.decode("ascii")}')
         exit(cmdout.returncode)
 
     with open(utils.tempfile, 'w') as f:
