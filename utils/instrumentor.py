@@ -77,7 +77,7 @@ def instrument_file(file, verbose=False):
     # step 1: remove comments / preprocess #
     ########################################
     preprocessingCmd = ' '.join([preprocessor, file])
-    print_message('preprocessing source file' + (f': {preprocessingCmd}' if verbose else ''))
+    print_message('Preprocessing source file' + (f': {preprocessingCmd}' if verbose else ''))
     cmdout = sp.run(preprocessingCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
     if (cmdout.returncode != 0):
         print_message(f'Error while running {preprocessor}: {cmdout.stderr.decode("ascii")}')
