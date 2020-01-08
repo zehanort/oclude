@@ -50,7 +50,7 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
         '''
         returns the instrumentation string
         '''
-        return f'atomic_add(&{hidden_counter_name_local}[{key}], {val});'
+        return f'atomic_add(&{hidden_counter_name_local}[{key}], {val}); /* {llvm_instructions[key]} */'
 
     # parse instrumentation data and create an instrumentation dict for each function
     instr_data_lines = instr_data_raw.splitlines()
