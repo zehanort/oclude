@@ -2,6 +2,7 @@
 #include <string>
 
 #include <llvm/IR/Module.h>
+#include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/SourceMgr.h>
 
@@ -38,10 +39,13 @@ int main(int argc, char const *argv[]) {
 
     /* iterate over functions, then basic blocks, then instructions */
     std::string funcname;
+    unsigned funcline;
+
     for (llvm::Module::const_iterator func = m->begin(); func != m->end(); func++) {
 
         if (func->isIntrinsic()) continue;
         funcname = func->getName().str();
+        funcline = func->getSubprogram()->getLine();
         std::cerr << prefix << "reporting about function " << funcname << std::endl;
         /* the structure that will hold the final results - instrumentation instructions for a single function *
          * one vector for each BB, holding strings of the format "line:instruction"                            */
@@ -67,15 +71,16 @@ int main(int argc, char const *argv[]) {
 
         }
 
-        instrumentation[funcname] = func_instrumentation;
+        instrumentation[funcname + ':' + std::to_string(funcline)] = func_instrumentation;
 
     }
 
     /* instrumentation info gathered; dump it in a python - friendly way for parsing */
+    std::string funcnameline;
     for (auto func_instrumentation : instrumentation) {
-        funcname = func_instrumentation.first;
+        funcnameline = func_instrumentation.first;
         for (auto bb_instrumentation : func_instrumentation.second) {
-            std::cout << funcname << '|';
+            std::cout << funcnameline << '|';
             for (std::string instrumentation_instruction : bb_instrumentation)
                 std::cout << instrumentation_instruction << '|';
             std::cout << std::endl;
