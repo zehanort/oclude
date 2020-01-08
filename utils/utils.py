@@ -9,6 +9,8 @@ class MessagePrinter(object):
             stderr.write(f'{self.prompt} {message}\n')
         elif prompt:
             stderr.write(f'{self.prompt} {message}')
+        elif nl:
+            stderr.write(message + '\n')
         else:
             stderr.write(message)
 
@@ -37,7 +39,7 @@ if (get_local_id(0) == 0) {{
 }}
 '''
 
-def add_instrumentation_data_to_file(filename, instr_data_raw):
+def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
     '''
     returns a dictionary "line (int): code to add (string)"
     '''
@@ -50,11 +52,25 @@ def add_instrumentation_data_to_file(filename, instr_data_raw):
         '''
         return f'atomic_add(&{hidden_counter_name_local}[{key}], {val});'
 
-    # parse instrumentation data and create an instrumentation dict
+    # parse instrumentation data and create an instrumentation dict for each function
+    instr_data_lines = instr_data_raw.splitlines()
+    instr_data_dicts = defaultdict(list)
+    previous_function_name, previous_function_line = instr_data_lines[0].split('|')[0].split(':')
+
     instr_data_dict = defaultdict(str)
-    for line in instr_data_raw.splitlines():
+
+    for line in instr_data_lines:
+        data = list(filter(None, line.split('|')))
+        current_function_name, current_function_line = data[0].split(':')
+        data = data[1:]
         bb_instrumentation_data = [0] * len(llvm_instructions)
-        data = filter(None, line.split('|')[1:])
+
+        # new function? (done with all BBs of the previous one)
+        if current_function_name != previous_function_name:
+            instr_data_dicts[previous_function_name, int(previous_function_line)].append(instr_data_dict)
+            previous_function_name, previous_function_line = current_function_name, current_function_line
+            instr_data_dict = defaultdict(str)
+
         for datum in data:
             [lineno, instruction] = datum.split(':')
             bb_instrumentation_data[llvm_instructions.index(instruction)] += 1
@@ -62,21 +78,43 @@ def add_instrumentation_data_to_file(filename, instr_data_raw):
             if instruction_cnt > 0:
                 instr_data_dict[int(lineno)] += write_incr(instruction_index, instruction_cnt)
 
-    # now modify the file in place with the instr_data dict
-    # the instr_data is a dict <line:instrumentation_data>
+    instr_data_dicts[(current_function_name, int(current_function_line))].append(instr_data_dict)
+
+    # sort instrumentation order as appeared in source file text and some mumbo-jumbo restructuring
+    # mainly to get rid of defaultdicts; final structure is explained in the comments below
+    instr_data_dicts = sorted(list(instr_data_dicts.items()), key=lambda x : x[0][1])
+    instr_data_dicts = list(map(lambda x : list(x), instr_data_dicts))
+    instr_data_list = [(x, *list(map(lambda defdict : list(defdict.items()), y))) for x, y in instr_data_dicts]
+    # at this point, instr_data_list holds instrumentation information in the following form:
+    # each entry is a tuple of the form ((function_name, function_line), instrumentation_data)
+    # the instrumentation_data is a list of tuples. Each tuple corresponds to a BB of the function
+    # each tuple holds the information (line to enter code -i.e. first line of the BB-, code -a string-)
+
+    # uncomment the following segment to see it for yourself:
+    # for (fn, fl), instrd in instr_data_list:
+    #     print('function', fn, 'line', fl)
+    #     for instrl, instrc in instrd:
+    #         print(f'\tinsert following code at line {instrl}: {instrc}')
+    # exit(0)
+
+    # now modify the file in place with the instr_data dicts
+    # each instr_data (1 per function) is a dict <line:instrumentation_data>
     with open(filename, 'r') as f:
         filedata = f.readlines()
     offset = -1
     insertion_line = 0
-    for lineno in instr_data_dict.keys():
-        # must add instrumentation data between the previous line and this one
-        insertion_line = lineno + offset
-        filedata.insert(insertion_line, instr_data_dict[lineno] + '\n')
-        offset += 1
-    insertion_line += 1
 
-    # lastly, add code at the end to copy local buffer to the respective space in the global one
-    filedata.insert(insertion_line, epilogue)
+    for (function_name, function_line), instr_data in instr_data_list:
+        for lineno, instr_string in instr_data:
+            # must add instrumentation data between the previous line and this one
+            insertion_line = lineno + offset
+            filedata.insert(insertion_line, instr_string + '\n')
+            offset += 1
+        insertion_line += 1
+        # lastly, add code at the end of kernels to copy local buffer to the respective space in the global one
+        if function_name in kernels:
+            filedata.insert(insertion_line, epilogue)
+            offset += 1
 
     # done; write the instrumented source back to file
     with open(filename, 'w') as f:

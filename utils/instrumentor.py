@@ -171,7 +171,7 @@ def instrument_file(file, verbose=False):
     instrumentation_data = cmdout.stdout.decode('ascii')
 
     # now add them to the source file, eventually instrumenting it
-    utils.add_instrumentation_data_to_file(utils.tempfile, instrumentation_data)
+    utils.add_instrumentation_data_to_file(utils.tempfile, kernelFuncs, instrumentation_data)
 
     # instrumentation is done! Congrats!
     print_message('Prettifing instrumented source code' + (f': {braceBreakerCmd}' if verbose else ''))
@@ -186,8 +186,12 @@ def instrument_file(file, verbose=False):
 
     if verbose:
         print_message('Final instrumented source code for inspection:')
+        print_message('============================================================================', nl=False)
+        print_message('============================================================================', prompt=False)
         with open(utils.tempfile, 'r') as f:
             for line in f.readlines():
-                print_message(line, prompt=False)
+                print_message(line, prompt=False, nl=False)
+        print_message('============================================================================', nl=False)
+        print_message('============================================================================', prompt=False)
 
     print_message('Intrumentation completed successfully')
