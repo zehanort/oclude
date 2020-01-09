@@ -77,7 +77,7 @@ def instrument_file(file, verbose=False):
     ########################################
     # step 1: remove comments / preprocess #
     ########################################
-    cmdout, cmderr = interact.run_command('Preprocessing source file', preprocessor, file)
+    cmdout, _ = interact.run_command('Preprocessing source file', preprocessor, file)
     with open(utils.tempfile, 'w') as f:
         f.writelines(filter(lambda line : line and not line.startswith('#'), cmdout.splitlines()))
 
@@ -121,7 +121,7 @@ def instrument_file(file, verbose=False):
     #################################################
     # step 4: add new line before every curly brace #
     #################################################
-    cmdout, cmderr = interact.run_command('Breaking curly braces', braceBreaker, *braceBreakerFlags, utils.tempfile)
+    cmdout, _ = interact.run_command('Breaking curly braces', braceBreaker, *braceBreakerFlags, utils.tempfile)
     with open(utils.tempfile, 'w') as f:
         f.write(cmdout)
 
