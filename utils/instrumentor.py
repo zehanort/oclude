@@ -140,9 +140,11 @@ def instrument_file(file, verbose):
     utils.add_instrumentation_data_to_file(utils.tempfile, kernelFuncs, instrumentation_data)
 
     # instrumentation is done! Congrats!
-    cmdout, _ = interact.run_command('Prettifing instrumented source code', braceBreaker, *braceBreakerFlags, utils.tempfile)
-    with open(utils.tempfile, 'w') as f:
-        f.write(cmdout)
+
+    if verbose:
+        cmdout, _ = interact.run_command('Prettifing instrumented source code', braceBreaker, *braceBreakerFlags, utils.tempfile)
+        with open(utils.tempfile, 'w') as f:
+            f.write(cmdout)
 
     if verbose:
         interact('Final instrumented source code for inspection:')
