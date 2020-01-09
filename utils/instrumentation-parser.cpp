@@ -9,9 +9,8 @@
 llvm::LLVMContext context;
 std::unique_ptr<llvm::Module> m;
 
-typedef std::vector<std::string>                      bb_instrumentation_t;
-typedef std::vector<bb_instrumentation_t>             func_instrumentation_t;
-typedef std::map<std::string, func_instrumentation_t> instrumentation_t;
+typedef std::vector<std::string>                    bb_instrumentation_t;
+typedef std::map<std::string, bb_instrumentation_t> instrumentation_t;
 
 int main(int argc, char const *argv[]) {
 
@@ -40,6 +39,7 @@ int main(int argc, char const *argv[]) {
     /* iterate over functions, then basic blocks, then instructions */
     std::string funcname;
     unsigned funcline;
+    int bbline;
 
     for (llvm::Module::const_iterator func = m->begin(); func != m->end(); func++) {
 
@@ -49,12 +49,14 @@ int main(int argc, char const *argv[]) {
         std::cerr << prefix << "reporting about function " << funcname << std::endl;
         /* the structure that will hold the final results - instrumentation instructions for a single function *
          * one vector for each BB, holding strings of the format "line:instruction"                            */
-        func_instrumentation_t func_instrumentation;
 
-        int i = 1;
+        std::vector<int> bblines;
+        unsigned i = 1;
         for (llvm::Function::const_iterator bb = func->begin(); bb != func->end(); bb++) {
 
             std::cerr << prefix << "\treporting about Basic Block #" << (i++) << std::endl;
+            /* reset bbline */
+            bbline = -1;
             bb_instrumentation_t bb_instrumentation;
 
             for (llvm::BasicBlock::const_iterator instr = bb->begin(); instr != bb->end(); instr++) {
@@ -63,28 +65,28 @@ int main(int argc, char const *argv[]) {
                 llvm::DebugLoc loc(metadata);
                 std::cerr << prefix << "\t\tinstruction " << instr->getOpcodeName()
                           << " from source code line " << loc.getLine() << " column " << loc.getCol() << std::endl;
+                /* check if bbline is updated */
+                if ((loc.getLine() != 0) && (bbline == -1))
+                    bbline = loc.getLine() - 1;
                 if (loc.getLine() != 0)
                     bb_instrumentation.push_back(std::to_string(loc.getLine()) + ':' + instr->getOpcodeName());
             }
 
-            func_instrumentation.push_back(bb_instrumentation);
+            std::cerr << prefix << "\tDONE reporting about Basic Block #" << (i-1) << " which started at line " << bbline << std::endl;
+            instrumentation[funcname + ':' + std::to_string(bbline)] = bb_instrumentation;
 
         }
-
-        instrumentation[funcname + ':' + std::to_string(funcline)] = func_instrumentation;
 
     }
 
     /* instrumentation info gathered; dump it in a python - friendly way for parsing */
-    std::string funcnameline;
-    for (auto func_instrumentation : instrumentation) {
-        funcnameline = func_instrumentation.first;
-        for (auto bb_instrumentation : func_instrumentation.second) {
-            std::cout << funcnameline << '|';
-            for (std::string instrumentation_instruction : bb_instrumentation)
-                std::cout << instrumentation_instruction << '|';
-            std::cout << std::endl;
-        }
+    std::string funcname_bbline;
+    for (auto bb_instrumentation : instrumentation) {
+        funcname_bbline = bb_instrumentation.first;
+        std::cout << funcname_bbline << '|';
+        for (std::string instrumentation_instruction : bb_instrumentation.second)
+            std::cout << instrumentation_instruction << '|';
+        std::cout << std::endl;
     }
 
     return 0;
