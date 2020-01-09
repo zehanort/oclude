@@ -1,5 +1,4 @@
 import argparse
-import subprocess as sp
 import os
 import utils
 
@@ -51,16 +50,17 @@ parser.add_argument('-v', '--verbose',
 
 args = parser.parse_args()
 
-print_message = utils.MessagePrinter(__file__.split(os.sep)[-1])
+interact = utils.Interactor(__file__.split(os.sep)[-1])
+interact.set_verbosity(args.verbose)
 
 # some sanity checks
 if args.size < args.work_groups or args.size % args.work_groups != 0:
-	print_message('size must be a multiple of work_groups')
+	interact('size must be a multiple of work_groups')
 	exit(1)
 
 if args.size // args.work_groups <= 8:
-	print_message('WARNING: Size not being greater than 8 * work_groups will most likely lead to invalid results.')
-	print_message('Proceed? [y/N] ', nl=False)
+	interact('WARNING: Size not being greater than 8 * work_groups will most likely lead to invalid results.')
+	interact('Proceed? [y/N] ', nl=False)
 	if input() != 'y':
 		exit(0)
 
@@ -76,21 +76,14 @@ hostcodeWrapperFlags = [
 
 ### STEP 1: instrument input source file ###
 ###  the final code ends up in tempfile  ###
-print_message('Instrumenting source code')
+interact('Instrumenting source code')
 utils.instrument_file(args.infile, args.verbose)
 
 ### STEP 2: run the kernel ###
-kernelRunCmd = ' '.join([hostcodeWrapper, *hostcodeWrapperFlags])
-print_message(f'Running kernel {args.kernel} from file {args.infile}' + (f': {kernelRunCmd}' if args.verbose else ''))
+cmdout, cmderr = interact.run_command(f'Running kernel {args.kernel} from file {args.infile}', hostcodeWrapper, *hostcodeWrapperFlags)
+interact(cmderr, prompt=False)
 
-cmdout = sp.run(kernelRunCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-if (cmdout.returncode != 0):
-    print_message(f'Error while running {hostcodeWrapper}: {cmdout.stderr.decode("ascii")}', nl=False)
-    exit(cmdout.returncode)
-
-print_message(cmdout.stderr.decode('ascii'), prompt=False)
-
-### STEP 3: parse hostcode-wrapper output and dump a oclgrind-like output ###
+### STEP 3: parse hostcode-wrapper output and dump an oclgrind-like output ###
 instcounts = sorted(
 	[
 		(utils.llvm_instructions[instIdx], instCnt)
@@ -98,7 +91,7 @@ instcounts = sorted(
 			lambda x : map(int, x),
 			map(
 				lambda x : x.split(':'),
-				cmdout.stdout.decode('ascii').splitlines()
+				cmdout.splitlines()
 			)
 		)
 		if instCnt != 0
@@ -109,7 +102,7 @@ instcounts = sorted(
 
 os.remove(utils.tempfile)
 
-print_message('Kernel run completed successfully')
+interact('Kernel run completed successfully')
 
 print(f"Instructions executed for kernel '{args.kernel}':")
 for instName, instCnt in instcounts:

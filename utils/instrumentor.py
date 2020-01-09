@@ -1,4 +1,3 @@
-import subprocess as sp
 import os
 import utils
 import types
@@ -7,7 +6,7 @@ from pycparserext.ext_c_parser import OpenCLCParser
 from pycparserext.ext_c_generator import OpenCLCGenerator
 from pycparser.c_ast import Decl, PtrDecl, TypeDecl, IdentifierType, ID, FuncDef
 
-print_message = utils.MessagePrinter(__file__.split(os.sep)[-1])
+interact = utils.Interactor(__file__.split(os.sep)[-1])
 
 ### 0 pass tools (preprocessor) ###
 preprocessor = 'cpp'
@@ -70,32 +69,22 @@ cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm',
 def instrument_file(file, verbose=False):
 
     if not os.path.exists(file):
-        print_message(f'Error: {file} is not a file')
+        interact(f'Error: {file} is not a file')
         exit(1)
+
+    interact.set_verbosity(verbose)
 
     ########################################
     # step 1: remove comments / preprocess #
     ########################################
-    preprocessingCmd = ' '.join([preprocessor, file])
-    print_message('Preprocessing source file' + (f': {preprocessingCmd}' if verbose else ''))
-    cmdout = sp.run(preprocessingCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    if (cmdout.returncode != 0):
-        print_message(f'Error while running {preprocessor}: {cmdout.stderr.decode("ascii")}')
-        exit(cmdout.returncode)
-
+    cmdout, cmderr = interact.run_command('Preprocessing source file', preprocessor, file)
     with open(utils.tempfile, 'w') as f:
-        f.writelines(filter(lambda line : line and not line.startswith('#'), cmdout.stdout.decode('ascii').splitlines()))
+        f.writelines(filter(lambda line : line and not line.startswith('#'), cmdout.splitlines()))
 
     ####################################
     # step 2: add missing curly braces #
     ####################################
-    addMissingCurlyBracesCmd = ' '.join([missingCurlyBracesAdder, utils.tempfile, *missingCurlyBracesAdderFlags])
-    print_message('Adding missing curly braces' + (f': {addMissingCurlyBracesCmd}' if verbose else ''))
-
-    cmdout = sp.run(addMissingCurlyBracesCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    if (cmdout.returncode != 0):
-        print_message(f'Error while running {missingCurlyBracesAdder}: {cmdout.stderr.decode("ascii")}')
-        exit(cmdout.returncode)
+    interact.run_command('Adding missing curly braces', missingCurlyBracesAdder, utils.tempfile, *missingCurlyBracesAdderFlags)
 
     ##################################################
     # step 3: add hidden counter argument in kernels #
@@ -132,16 +121,9 @@ def instrument_file(file, verbose=False):
     #################################################
     # step 4: add new line before every curly brace #
     #################################################
-    braceBreakerCmd = ' '.join([braceBreaker, *braceBreakerFlags, utils.tempfile])
-    print_message('Breaking curly braces' + (f': {braceBreakerCmd}' if verbose else ''))
-
-    cmdout = sp.run(braceBreakerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    if (cmdout.returncode != 0):
-        print_message(f'Error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}')
-        exit(cmdout.returncode)
-
+    cmdout, cmderr = interact.run_command('Breaking curly braces', braceBreaker, *braceBreakerFlags, utils.tempfile)
     with open(utils.tempfile, 'w') as f:
-        f.write(cmdout.stdout.decode('ascii'))
+        f.write(cmdout)
 
     #########################################################################
     # step 5: instrument source code with counter incrementing where needed #
@@ -150,48 +132,26 @@ def instrument_file(file, verbose=False):
     # first take the instrumentation data from the respective tool
     # after compiling source to LLVM bitcode
 
-    cl2llCompilerCmd = ' '.join([cl2llCompiler, *cl2llCompilerFlags, '-o', utils.templlvm, utils.tempfile])
-    print_message('Compiling source to LLVM bitcode' + (f': {cl2llCompilerCmd}' if verbose else ''))
-
-    cmdout = sp.run(cl2llCompilerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    if (cmdout.returncode != 0):
-        print_message(f'Error while running {cl2llCompiler}: {cmdout.stderr.decode("ascii")}')
-        exit(cmdout.returncode)
-
-    instrumentationGetterCmd = ' '.join([instrumentationGetter, utils.templlvm])
-    print_message('Instrumenting source' + (f': {instrumentationGetterCmd}' if verbose else ''))
-
-    cmdout = sp.run(instrumentationGetterCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    if (cmdout.returncode != 0):
-        print_message(f'Error while running {instrumentationGetter}: {cmdout.stderr.decode("ascii")}')
-        exit(cmdout.returncode)
-
+    interact.run_command('Compiling source to LLVM bitcode', cl2llCompiler, *cl2llCompilerFlags, '-o', utils.templlvm, utils.tempfile)
+    instrumentation_data, _ = interact.run_command('Instrumenting source', instrumentationGetter, utils.templlvm)
     os.remove(utils.templlvm)
-
-    instrumentation_data = cmdout.stdout.decode('ascii')
 
     # now add them to the source file, eventually instrumenting it
     utils.add_instrumentation_data_to_file(utils.tempfile, kernelFuncs, instrumentation_data)
 
     # instrumentation is done! Congrats!
-    print_message('Prettifing instrumented source code' + (f': {braceBreakerCmd}' if verbose else ''))
-
-    cmdout = sp.run(braceBreakerCmd, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    if (cmdout.returncode != 0):
-        print_message(f'Error while running {braceBreaker}: {cmdout.stderr.decode("ascii")}')
-        exit(cmdout.returncode)
-
+    cmdout, _ = interact.run_command('Prettifing instrumented source code', braceBreaker, *braceBreakerFlags, utils.tempfile)
     with open(utils.tempfile, 'w') as f:
-        f.write(cmdout.stdout.decode('ascii'))
+        f.write(cmdout)
 
     if verbose:
-        print_message('Final instrumented source code for inspection:')
-        print_message('============================================================================', nl=False)
-        print_message('============================================================================', prompt=False)
+        interact('Final instrumented source code for inspection:')
+        interact('============================================================================', nl=False)
+        interact('============================================================================', prompt=False)
         with open(utils.tempfile, 'r') as f:
             for line in f.readlines():
-                print_message(line, prompt=False, nl=False)
-        print_message('============================================================================', nl=False)
-        print_message('============================================================================', prompt=False)
+                interact(line, prompt=False, nl=False)
+        interact('============================================================================', nl=False)
+        interact('============================================================================', prompt=False)
 
-    print_message('Intrumentation completed successfully')
+    interact('Intrumentation completed successfully')
