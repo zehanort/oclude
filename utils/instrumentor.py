@@ -142,17 +142,19 @@ def instrument_file(file, verbose):
     # instrumentation is done! Congrats!
 
     if verbose:
+
         cmdout, _ = interact.run_command('Prettifing instrumented source code', braceBreaker, *braceBreakerFlags, utils.tempfile)
         with open(utils.tempfile, 'w') as f:
             f.write(cmdout)
 
-    if verbose:
         interact('Final instrumented source code for inspection:')
         interact('============================================================================', nl=False)
         interact('============================================================================', prompt=False)
+
         with open(utils.tempfile, 'r') as f:
             for line in f.readlines():
                 interact(line, prompt=False, nl=False)
+
         interact('============================================================================', nl=False)
         interact('============================================================================', prompt=False)
 
