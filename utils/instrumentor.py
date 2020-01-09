@@ -66,7 +66,7 @@ cl2llCompiler = 'clang'
 cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm',
                       '-S', '-cl-std=CL2.0', '-Xclang', '-finclude-default-header']
 
-def instrument_file(file, verbose=False):
+def instrument_file(file, verbose):
 
     if not os.path.exists(file):
         interact(f'Error: {file} is not a file')

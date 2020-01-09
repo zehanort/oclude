@@ -33,7 +33,7 @@ parser.add_argument('-w', '--work-groups',
 
 parser.add_argument('-p', '--platform',
 	type=int,
-	help='the index of OpenCL platform to use (default: 0)',
+	help='the index of the OpenCL platform to use (default: 0)',
 	default=0
 )
 
@@ -81,7 +81,7 @@ utils.instrument_file(args.infile, args.verbose)
 
 ### STEP 2: run the kernel ###
 cmdout, cmderr = interact.run_command(f'Running kernel {args.kernel} from file {args.infile}', hostcodeWrapper, *hostcodeWrapperFlags)
-interact(cmderr, prompt=False)
+interact(cmderr, prompt=False, nl=False)
 
 ### STEP 3: parse hostcode-wrapper output and dump an oclgrind-like output ###
 instcounts = sorted(
