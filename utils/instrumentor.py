@@ -131,10 +131,24 @@ def instrument_file(file, verbose):
 
     # first take the instrumentation data from the respective tool
     # after compiling source to LLVM bitcode
+    # WITHOUT allowing function inlining (to get pure data for each function)
 
-    interact.run_command('Compiling source to LLVM bitcode', cl2llCompiler, *cl2llCompilerFlags, '-o', utils.templlvm, utils.tempfile)
-    instrumentation_data, _ = interact.run_command('Instrumenting source', instrumentationGetter, utils.templlvm)
+    interact.run_command(
+        'Compiling source to LLVM bitcode (1/2)', cl2llCompiler, *cl2llCompilerFlags, '-fno-inline', '-o', utils.templlvm, utils.tempfile
+    )
+    instrumentation_data, _ = interact.run_command(
+        'Retrieving instrumentation data from LLVM bitcode', instrumentationGetter, utils.templlvm
+    )
+    _, inliner_report = interact.run_command(
+        'Compiling source to LLVM bitcode (2/2)', cl2llCompiler, *cl2llCompilerFlags, '-Rpass=inline', '-o', utils.templlvm, utils.tempfile
+    )
     os.remove(utils.templlvm)
+
+    # for each inlined function, replace the "call" with a negative "ret"
+    # that means that each inlined function leads to 1 less "call" and 1 less "ret"
+    inline_lines = [x.split()[0].split(':')[-3] for x in filter(lambda y : 'remark' in y, inliner_report.splitlines())]
+    for inline_line in inline_lines:
+        instrumentation_data = instrumentation_data.replace(inline_line + ':call', inline_line + ':retNOT', 1)
 
     # now add them to the source file, eventually instrumenting it
     utils.add_instrumentation_data_to_file(utils.tempfile, kernelFuncs, instrumentation_data)

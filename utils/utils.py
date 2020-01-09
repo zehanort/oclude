@@ -64,10 +64,13 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
     from collections import defaultdict
 
     def write_incr(key, val):
-        '''
-        returns the instrumentation string
-        '''
         return f'atomic_add(&{hidden_counter_name_local}[{key}], {val}); /* {llvm_instructions[key]} */'
+
+    def write_decr_ret(val):
+        '''
+        needed to balance out the "call"s that were removed due to inlined functions
+        '''
+        return f'atomic_sub(&{hidden_counter_name_local}[{llvm_instructions.index("ret")}], {val}); /* -ret */'
 
     # parse instrumentation data and create an instrumentation dict for each function
     instr_data_lines = instr_data_raw.splitlines()
@@ -80,7 +83,7 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
         data = list(filter(None, line.split('|')))
         current_function_name, current_function_line = data[0].split(':')
         data = data[1:]
-        bb_instrumentation_data = [0] * len(llvm_instructions)
+        bb_instrumentation_data = [0] * (len(llvm_instructions) + 1) # +1 for ret negation (inlined functions)
 
         # new function? (done with all BBs of the previous one)
         if current_function_name != previous_function_name:
@@ -90,10 +93,17 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
 
         for datum in data:
             [lineno, instruction] = datum.split(':')
-            bb_instrumentation_data[llvm_instructions.index(instruction)] += 1
+            if instruction == 'retNOT':
+                bb_instrumentation_data[-1] += 1
+            else:
+                bb_instrumentation_data[llvm_instructions.index(instruction)] += 1
         for instruction_index, instruction_cnt in enumerate(bb_instrumentation_data):
             if instruction_cnt > 0:
-                instr_data_dict[int(lineno)] += write_incr(instruction_index, instruction_cnt)
+                # is it a ret negation due to an inlined function?
+                if instruction_index == len(bb_instrumentation_data) - 1:
+                    instr_data_dict[int(lineno)] += write_decr_ret(instruction_cnt)
+                else:
+                    instr_data_dict[int(lineno)] += write_incr(instruction_index, instruction_cnt)
 
     instr_data_dicts[(current_function_name, int(current_function_line))].append(instr_data_dict)
 
