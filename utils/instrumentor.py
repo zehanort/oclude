@@ -79,7 +79,7 @@ def instrument_file(file, verbose):
     ########################################
     cmdout, _ = interact.run_command('Preprocessing source file', preprocessor, file)
     with open(utils.tempfile, 'w') as f:
-        f.writelines(filter(lambda line : line and not line.startswith('#'), cmdout.splitlines()))
+        f.writelines(filter(lambda line : line and not line.startswith('#'), cmdout.splitlines(keepends=True)))
 
     ####################################
     # step 2: add missing curly braces #
