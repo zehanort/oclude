@@ -13,6 +13,7 @@
 #define OCLUDE_COUNTER_LOCAL  (std::string("ocludeHiddenCounterLocal"))
 #define OCLUDE_COUNTER_GLOBAL (std::string("ocludeHiddenCounterGlobal"))
 #define EMPTY_STRING          (std::string(""))
+#define COUNTER_BUFFER_SIZE   74
 
 class MessagePrinter {
 private:
@@ -218,10 +219,10 @@ int main(int argc, char const *argv[]) {
 
         // handle oclude counters in a special manner
         if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_LOCAL, 0) == 0)
-            kernel.setArg(i, cl::Local(sizeof(cl_uint) * 66));
+            kernel.setArg(i, cl::Local(sizeof(cl_uint) * COUNTER_BUFFER_SIZE));
         else if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_GLOBAL, 0) == 0) {
-            kernel_args.push_back(v_uint(66 * WORK_GROUPS));
-            for (unsigned j = 0; j < 66 * WORK_GROUPS; j++)
+            kernel_args.push_back(v_uint(COUNTER_BUFFER_SIZE * WORK_GROUPS));
+            for (unsigned j = 0; j < COUNTER_BUFFER_SIZE * WORK_GROUPS; j++)
                 std::get<v_uint>(kernel_args.back())[j] = 0;
             argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_uint>(kernel_args.back())), end(std::get<v_uint>(kernel_args.back())), false);
             kernel.setArg(i, argumentBuffers[i]);
@@ -276,14 +277,14 @@ int main(int argc, char const *argv[]) {
     queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(LENGTH), cl::NDRange(LENGTH / WORK_GROUPS));
 
     /*** Step 4: read counter buffer ***/
-    v_uint globalCounter(66 * WORK_GROUPS);
-    queue.enqueueReadBuffer(argumentBuffers[nargs-1], CL_TRUE, 0, sizeof(cl_uint) * 66 * WORK_GROUPS, globalCounter.data());
+    v_uint globalCounter(COUNTER_BUFFER_SIZE * WORK_GROUPS);
+    queue.enqueueReadBuffer(argumentBuffers[nargs-1], CL_TRUE, 0, sizeof(cl_uint) * COUNTER_BUFFER_SIZE * WORK_GROUPS, globalCounter.data());
 
     /*** Step 5: aggregate instruction counts across work groups ***/
-    v_uint finalCounter(66, 0);
-    for (unsigned i = 0; i < 66; i++)
+    v_uint finalCounter(COUNTER_BUFFER_SIZE, 0);
+    for (unsigned i = 0; i < COUNTER_BUFFER_SIZE; i++)
         for (unsigned j = 0; j < WORK_GROUPS; j++)
-            finalCounter[i] += globalCounter[i + j * 66];
+            finalCounter[i] += globalCounter[i + j * COUNTER_BUFFER_SIZE];
 
     /*** Step 6: report instruction counts ***/
     for (unsigned i = 0; i < finalCounter.size(); i++)
