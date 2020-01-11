@@ -126,7 +126,6 @@ int main(int argc, char const *argv[]) {
                             operand = instr->getOperand(0)->getName().str();
 
                         if (is_kernel) {
-                            std::cerr << "AAAAAAAAAAAAAAAAA " << operand << ' ' << arg_addr_spaces[operand] <<std::endl;
                             switch (arg_addr_spaces[operand]) {
                                 case ADDRESS_SPACE::PRIVATE:
                                     addrspace_notation = "private";
@@ -154,7 +153,6 @@ int main(int argc, char const *argv[]) {
                             operand = instr->getOperand(1)->getName().str();
 
                         if (is_kernel) {
-                            std::cerr << "BBBBBBBBBBBBBBBB " << operand << ' ' << arg_addr_spaces[operand] <<std::endl;
                             switch (arg_addr_spaces[operand]) {
                                 case ADDRESS_SPACE::PRIVATE:
                                     addrspace_notation = "private";

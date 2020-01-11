@@ -82,8 +82,10 @@ utils.instrument_file(args.infile, args.verbose)
 ### STEP 2: run the kernel ###
 cmdout, cmderr = interact.run_command(f'Running kernel {args.kernel} from file {args.infile}', hostcodeWrapper, *hostcodeWrapperFlags)
 interact(cmderr, prompt=False, nl=False)
+os.remove(utils.tempfile)
+interact('Kernel run completed successfully')
 
-### STEP 3: parse hostcode-wrapper output and dump an oclgrind-like output ###
+### STEP 3: parse hostcode-wrapper output ###
 instcounts = sorted(
 	[
 		(utils.llvm_instructions[instIdx], instCnt)
@@ -100,10 +102,7 @@ instcounts = sorted(
 	reverse=True
 )
 
-os.remove(utils.tempfile)
-
-interact('Kernel run completed successfully')
-
+### STEP 4: dump an oclgrind-like output ###
 print(f"Instructions executed for kernel '{args.kernel}':")
 for instName, instCnt in instcounts:
 	print(f'{instCnt : 16} - {instName}')
