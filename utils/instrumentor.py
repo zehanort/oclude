@@ -63,8 +63,8 @@ instrumentationGetter = os.path.join('utils', 'instrumentation-parser')
 
 ### 5th pass tools ###
 cl2llCompiler = 'clang'
-cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm',
-                      '-S', '-cl-std=CL2.0', '-Xclang', '-finclude-default-header']
+cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm', '-S', '-cl-std=CL2.0', '-Xclang',
+                      '-finclude-default-header', '-fno-discard-value-names']
 
 def instrument_file(file, verbose):
 
