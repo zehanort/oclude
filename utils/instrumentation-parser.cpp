@@ -96,7 +96,7 @@ int main(int argc, char const *argv[]) {
 
         std::vector<int> bblines;
         unsigned i = 1;
-        std::string operand;
+        std::string operand, addrspace_notation;
         for (llvm::Function::const_iterator bb = func->begin(); bb != func->end(); bb++) {
 
             std::cerr << prefix << "\treporting about Basic Block #" << (i++) << std::endl;
@@ -127,25 +127,24 @@ int main(int argc, char const *argv[]) {
 
                         if (is_kernel) {
                             std::cerr << "AAAAAAAAAAAAAAAAA " << operand << ' ' << arg_addr_spaces[operand] <<std::endl;
-                            char addrspace_notation;
                             switch (arg_addr_spaces[operand]) {
                                 case ADDRESS_SPACE::PRIVATE:
-                                    addrspace_notation = 'p';
+                                    addrspace_notation = "private";
                                     break;
                                 case ADDRESS_SPACE::GLOBAL:
-                                    addrspace_notation = 'g';
+                                    addrspace_notation = "global";
                                     break;
                                 case ADDRESS_SPACE::CONSTANT:
-                                    addrspace_notation = 'c';
+                                    addrspace_notation = "constant";
                                     break;
                                 case ADDRESS_SPACE::LOCAL:
-                                    addrspace_notation = 'l';
+                                    addrspace_notation = "local";
                                     break;
                             }
-                            bb_instrumentation.push_back(line + ":load_" + addrspace_notation);
+                            bb_instrumentation.push_back(line + ":load " + addrspace_notation);
                         }
                         else
-                            bb_instrumentation.push_back(line + ":load_helpfunc");
+                            bb_instrumentation.push_back(line + ":load callee");
                     }
                     else if (llvm::isa<llvm::StoreInst>(instr)) {
 
@@ -156,25 +155,24 @@ int main(int argc, char const *argv[]) {
 
                         if (is_kernel) {
                             std::cerr << "BBBBBBBBBBBBBBBB " << operand << ' ' << arg_addr_spaces[operand] <<std::endl;
-                            char addrspace_notation;
                             switch (arg_addr_spaces[operand]) {
                                 case ADDRESS_SPACE::PRIVATE:
-                                    addrspace_notation = 'p';
+                                    addrspace_notation = "private";
                                     break;
                                 case ADDRESS_SPACE::GLOBAL:
-                                    addrspace_notation = 'g';
+                                    addrspace_notation = "global";
                                     break;
                                 case ADDRESS_SPACE::CONSTANT:
-                                    addrspace_notation = 'c';
+                                    addrspace_notation = "constant";
                                     break;
                                 case ADDRESS_SPACE::LOCAL:
-                                    addrspace_notation = 'l';
+                                    addrspace_notation = "local";
                                     break;
                             }
-                            bb_instrumentation.push_back(line + ":store_" + addrspace_notation);
+                            bb_instrumentation.push_back(line + ":store " + addrspace_notation);
                         }
                         else
-                            bb_instrumentation.push_back(line + ":store_helpfunc");
+                            bb_instrumentation.push_back(line + ":store callee");
                     }
                     else
                         bb_instrumentation.push_back(std::to_string(loc.getLine()) + ':' + instr->getOpcodeName());
