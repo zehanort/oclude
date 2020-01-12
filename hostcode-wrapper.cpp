@@ -54,6 +54,16 @@ inline std::string loadProgram(std::string input) {
     );
 }
 
+/* for pretty-printing only */
+std::string resolve_address_qualifier(int address_qual) {
+    switch (address_qual) {
+        case CL_KERNEL_ARG_ADDRESS_GLOBAL:   return "global";
+        case CL_KERNEL_ARG_ADDRESS_CONSTANT: return "constant";
+        case CL_KERNEL_ARG_ADDRESS_LOCAL:    return "local";
+        default:                             return "private";
+    }
+}
+
 int main(int argc, char const *argv[]) {
 
     if (argc < 5) {
@@ -193,8 +203,7 @@ int main(int argc, char const *argv[]) {
             continue;
         print_message("Kernel arg " + std::to_string(i) + ": " + kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) + '\t' +
                                                      " type: " + kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i) + '\t' +
-                                             " address qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i)) + '\t' +
-                                              " access qual: " + std::to_string(kernel.getArgInfo<CL_KERNEL_ARG_ACCESS_QUALIFIER>(i)));
+                                             " address qual: " + resolve_address_qualifier(kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i)));
     }
 
     /*** Step 2: create an object for each kernel argument ***/
@@ -230,45 +239,52 @@ int main(int argc, char const *argv[]) {
 
         else if (argtype.rfind("int", 0) == 0) {
             if (is_buffer) {
-                kernel_args.push_back(v_int(LENGTH));
-                for (unsigned j = 0; j < LENGTH; j++)
-                    std::get<v_int>(kernel_args.back())[j] = int_dis(gen);
-                // kernel.setArg(i, cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(cl_int) * LENGTH, kernel_arg.data()));
-                argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_int>(kernel_args.back())), end(std::get<v_int>(kernel_args.back())), false);
-                kernel.setArg(i, argumentBuffers[i]);
+
+                if (kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i) == CL_KERNEL_ARG_ADDRESS_LOCAL)
+                    kernel.setArg(i, cl::Local(sizeof(cl_int) * COUNTER_BUFFER_SIZE));
+                else {
+                    kernel_args.push_back(v_int(LENGTH));
+                    for (unsigned j = 0; j < LENGTH; j++)
+                        std::get<v_int>(kernel_args.back())[j] = int_dis(gen);
+                    argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_int>(kernel_args.back())), end(std::get<v_int>(kernel_args.back())), false);
+                    kernel.setArg(i, argumentBuffers[i]);
+                }
+
             }
-            else {
-                // kernel_args.push_back(int_dis(gen));
+            else
                 kernel.setArg(i, int_dis(gen));
-            }
         }
         else if (argtype.rfind("uint", 0) == 0) {
             if (is_buffer) {
-                kernel_args.push_back(v_uint(LENGTH));
-                for (unsigned j = 0; j < LENGTH; j++)
-                    std::get<v_uint>(kernel_args.back())[j] = uint_dis(gen);
-                // kernel.setArg(i, cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * LENGTH, kernel_arg.data()));
-                argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_uint>(kernel_args.back())), end(std::get<v_uint>(kernel_args.back())), false);
-                kernel.setArg(i, argumentBuffers[i]);
+
+                if (kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i) == CL_KERNEL_ARG_ADDRESS_LOCAL)
+                    kernel.setArg(i, cl::Local(sizeof(cl_int) * COUNTER_BUFFER_SIZE));
+                else {
+                    kernel_args.push_back(v_uint(LENGTH));
+                    for (unsigned j = 0; j < LENGTH; j++)
+                        std::get<v_uint>(kernel_args.back())[j] = uint_dis(gen);
+                    argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_uint>(kernel_args.back())), end(std::get<v_uint>(kernel_args.back())), false);
+                    kernel.setArg(i, argumentBuffers[i]);
+                }
             }
-            else {
-                // kernel_args.push_back(uint_dis(gen));
+            else
                 kernel.setArg(i, uint_dis(gen));
-            }
         }
         else if (argtype.rfind("float", 0) == 0) {
             if (is_buffer) {
-                kernel_args.push_back(v_float(LENGTH));
-                for (unsigned j = 0; j < LENGTH; j++)
-                    std::get<v_float>(kernel_args.back())[j] = float_dis(gen);
-                // kernel.setArg(i, cl::Buffer(context, CL_MEM_READ_WRITE, sizeof(cl_float) * LENGTH, kernel_arg.data()));
-                argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_float>(kernel_args.back())), end(std::get<v_float>(kernel_args.back())), false);
-                kernel.setArg(i, argumentBuffers[i]);
+
+                if (kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i) == CL_KERNEL_ARG_ADDRESS_LOCAL)
+                    kernel.setArg(i, cl::Local(sizeof(cl_int) * COUNTER_BUFFER_SIZE));
+                else {
+                    kernel_args.push_back(v_float(LENGTH));
+                    for (unsigned j = 0; j < LENGTH; j++)
+                        std::get<v_float>(kernel_args.back())[j] = float_dis(gen);
+                    argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_float>(kernel_args.back())), end(std::get<v_float>(kernel_args.back())), false);
+                    kernel.setArg(i, argumentBuffers[i]);
+                }
             }
-            else {
-                // kernel_args.push_back(rand_float);
+            else
                 kernel.setArg(i, float_dis(gen));
-            }
         }
     }
 
