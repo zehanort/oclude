@@ -68,7 +68,8 @@ int main(int argc, char const *argv[]) {
         funcname  = func->getName().str();
         funcline  = func->getSubprogram()->getLine();
         is_kernel = std::find(kernels.begin(), kernels.end(), funcname) != kernels.end();
-        std::cerr << prefix << "reporting about function " << funcname << (is_kernel ? " (kernel function)" : "") << std::endl;
+        std::cerr << prefix << "reporting about function " << funcname << (is_kernel ? " (kernel function) " : " ")
+                  << "at line " << funcline << std::endl;
 
         /*
          If the current function is a kernel, we need to differentiate between the address spaces
