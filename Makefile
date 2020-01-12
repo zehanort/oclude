@@ -1,20 +1,21 @@
 .PHONY: clean distclean default
 
-CC=gcc
-CFLAGS=
-
 CXX=g++
-CXXFLAGS=-std=c++17 -Wall -Wno-ignored-attributes -Werror -O3
+CXXFLAGS=-std=c++17 -O3 -Wall -Wno-ignored-attributes -Werror
 LDFLAGS=-lOpenCL
 
-default: hostcode-wrapper
+CXXFLAGS_UTILS=-std=c++14 -O3 `llvm-config --cxxflags`
+LDFLAGS_UTILS=`llvm-config --ldflags --system-libs --libs all`
+
+default: hostcode-wrapper utils/instrumentation-parser
 
 hostcode-wrapper: hostcode-wrapper.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
-	cd utils; $(MAKE)
+
+utils/instrumentation-parser: utils/instrumentation-parser.cpp
+	$(CXX) $(CXXFLAGS_UTILS) -o $@ $^ $(LDFLAGS_UTILS)
 
 clean:
-	$(RM) hostcode-wrapper
-	cd utils; $(MAKE) clean
+	$(RM) hostcode-wrapper utils/instrumentation-parser
 
 distclean: clean
