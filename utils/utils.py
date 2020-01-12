@@ -51,7 +51,13 @@ templlvm = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.oclude_tmp
 hidden_counter_name_local = 'ocludeHiddenCounterLocal'
 hidden_counter_name_global = 'ocludeHiddenCounterGlobal'
 
-epilogue = f'''barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+prologue = f'''if (get_local_id(0) == 0)
+    for (int i = 0; i < {len(llvm_instructions)}; i++)
+        {hidden_counter_name_local}[i] = 0;
+barrier(CLK_GLOBAL_MEM_FENCE);
+'''
+
+epilogue = f'''barrier(CLK_GLOBAL_MEM_FENCE);
 if (get_local_id(0) == 0) {{
     int glid = get_group_id(0) * {len(llvm_instructions)};
     for (int i = glid; i < glid + {len(llvm_instructions)}; i++)
@@ -76,7 +82,7 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
         return f'atomic_sub(&{hidden_counter_name_local}[{llvm_instructions.index("ret")}], {val}); /* -ret */'
 
     # parse instrumentation data and create an instrumentation dict for each function
-    instr_data_lines = instr_data_raw.splitlines()
+    instr_data_lines = sorted(instr_data_raw.splitlines(), key=lambda x : int(x.split('|')[0].split(':')[1]))
     instr_data_dicts = defaultdict(list)
     previous_function_name, previous_function_line = instr_data_lines[0].split('|')[0].split(':')
 
@@ -104,17 +110,17 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
             if instruction_cnt > 0:
                 # is it a ret negation due to an inlined function?
                 if instruction_index == len(bb_instrumentation_data) - 1:
-                    instr_data_dict[int(lineno)] += write_decr_ret(instruction_cnt)
+                    instr_data_dict[int(current_function_line)] += write_decr_ret(instruction_cnt)
                 else:
-                    instr_data_dict[int(lineno)] += write_incr(instruction_index, instruction_cnt)
+                    instr_data_dict[int(current_function_line)] += write_incr(instruction_index, instruction_cnt)
 
-    instr_data_dicts[(current_function_name, int(current_function_line))].append(instr_data_dict)
+    instr_data_dicts[(previous_function_name, int(previous_function_line))].append(instr_data_dict)
 
     # sort instrumentation order as appeared in source file text and some mumbo-jumbo restructuring
     # mainly to get rid of defaultdicts; final structure is explained in the comments below
-    instr_data_dicts = sorted(list(instr_data_dicts.items()), key=lambda x : x[0][1])
-    instr_data_dicts = list(map(lambda x : list(x), instr_data_dicts))
+    instr_data_dicts = list(map(lambda x : list(x), instr_data_dicts.items()))
     instr_data_list = [(x, *list(map(lambda defdict : list(defdict.items()), y))) for x, y in instr_data_dicts]
+    instr_data_list = [(x, sorted(y, key=lambda k : k[0])) for x, y in instr_data_list]
     # at this point, instr_data_list holds instrumentation information in the following form:
     # each entry is a tuple of the form ((function_name, function_line), instrumentation_data)
     # the instrumentation_data is a list of tuples. Each tuple corresponds to a BB of the function
@@ -125,16 +131,23 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
     #     print('function', fn, 'line', fl)
     #     for instrl, instrc in instrd:
     #         print(f'\tinsert following code at line {instrl}: {instrc}')
+    #         print()
     # exit(0)
 
     # now modify the file in place with the instr_data dicts
     # each instr_data (1 per function) is a dict <line:instrumentation_data>
     with open(filename, 'r') as f:
         filedata = f.readlines()
-    offset = -1
+    offset = 0
     insertion_line = 0
+    added_prologue = defaultdict(bool)
 
     for (function_name, function_line), instr_data in instr_data_list:
+        # firstly, add code at the start of kernels to initialize local counter buffer to 0
+        if function_name in kernels and not added_prologue[function_name]:
+            filedata.insert(function_line + offset, prologue)
+            offset += 1
+            added_prologue[function_name] = True
         for lineno, instr_string in instr_data:
             # must add instrumentation data between the previous line and this one
             insertion_line = lineno + offset

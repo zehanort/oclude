@@ -79,7 +79,7 @@ def instrument_file(file, verbose):
     ########################################
     cmdout, _ = interact.run_command('Preprocessing source file', preprocessor, file)
     with open(utils.tempfile, 'w') as f:
-        f.writelines(filter(lambda line : line and not line.startswith('#'), cmdout.splitlines(keepends=True)))
+        f.writelines(filter(lambda line : line.strip() and not line.startswith('#'), cmdout.splitlines(keepends=True)))
 
     ####################################
     # step 2: add missing curly braces #
@@ -123,7 +123,7 @@ def instrument_file(file, verbose):
     #################################################
     cmdout, _ = interact.run_command('Breaking curly braces', braceBreaker, *braceBreakerFlags, utils.tempfile)
     with open(utils.tempfile, 'w') as f:
-        f.write(cmdout)
+        f.writelines(filter(lambda line : line.strip(), cmdout.splitlines(keepends=True)))
 
     #########################################################################
     # step 5: instrument source code with counter incrementing where needed #
