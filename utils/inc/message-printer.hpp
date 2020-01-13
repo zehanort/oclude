@@ -1,3 +1,6 @@
+#ifndef __MP_HPP__
+#define __MP_HPP__
+
 #include <iostream>
 #include <string>
 
@@ -25,3 +28,5 @@ public:
     }
 
 };
+
+#endif

@@ -1,5 +1,7 @@
 #include "typegen.hpp"
 
+namespace typegen {
+
 typedef std::variant<std::pair<cl_int, cl_int>, std::pair<cl_uint, cl_uint>, std::pair<cl_float, cl_float>> limits_t;
 typedef void (*genfunc_t) (void *, size_t, limits_t);
 
@@ -72,3 +74,5 @@ std::pair<void*, size_t> generate_kernel_argument(std::string typestr, size_t nm
 	typegenfunc(buf, nmemb, typelimits);
 	return std::make_pair(buf, typesize * nmemb);
 }
+
+} // end namespace typegen

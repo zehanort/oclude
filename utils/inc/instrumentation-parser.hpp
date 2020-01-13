@@ -1,3 +1,6 @@
+#ifndef __IP_HPP__
+#define __IP_HPP__
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -171,3 +174,5 @@ inline void dump_instrumentation_info(instrumentation_t instrumentation) {
     }
     return;
 }
+
+#endif

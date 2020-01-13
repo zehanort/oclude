@@ -20,7 +20,7 @@ int main(int argc, char const *argv[]) {
     ] = oclutils.parse_arguments(argc, argv);
 
     // initialize the limits of primitive types based on user input
-    set_limits(LENGTH);
+    typegen::set_limits(LENGTH);
 
     /******************************
      * PART 1: PLATFORM SELECTION *

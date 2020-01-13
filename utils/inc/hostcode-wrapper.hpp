@@ -1,3 +1,6 @@
+#ifndef __HW_HPP__
+#define __HW_HPP__
+
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -210,7 +213,7 @@ public:
             // handle the real kernel arguments (NOTE: right now, these buffers can not be read back for some reason)
             else {
                 size_t nmemb = is_buffer ? LENGTH : 1;
-                auto [ argument, total_size ] = generate_kernel_argument(argtype, nmemb);
+                auto [ argument, total_size ] = typegen::generate_kernel_argument(argtype, nmemb);
                 arguments.push_back(argument);
                 if (is_buffer) {
                     argumentBuffers[i] = cl::Buffer(context, CL_MEM_READ_WRITE, total_size, argument);
@@ -237,3 +240,5 @@ public:
     }
 
 };
+
+#endif
