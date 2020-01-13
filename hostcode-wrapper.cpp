@@ -10,6 +10,8 @@
     #include <CL/cl.hpp>
 #endif
 
+#include "utils/typegen.hpp"
+
 #define OCLUDE_COUNTER_LOCAL  (std::string("ocludeHiddenCounterLocal"))
 #define OCLUDE_COUNTER_GLOBAL (std::string("ocludeHiddenCounterGlobal"))
 #define EMPTY_STRING          (std::string(""))
@@ -73,16 +75,17 @@ int main(int argc, char const *argv[]) {
 
     std::string kernel_file = argv[1];
     std::string kernel_name = argv[2];
-    unsigned LENGTH = std::stoi(argv[3]);
-    unsigned WORK_GROUPS = std::stoi(argv[4]);
+    uint LENGTH = std::stoi(argv[3]);
+    uint WORK_GROUPS = std::stoi(argv[4]);
     std::string platform_str;
     if (argc > 5) platform_str = argv[5];
     else          platform_str = EMPTY_STRING;
     std::string device_str;
     if (argc > 6) device_str = argv[6];
     else          device_str = EMPTY_STRING;
-    unsigned platform_id, device_id;
+    uint platform_id, device_id;
     std::string platform_name, device_name;
+    set_limits(LENGTH);
 
     /******************************
      * PART 1: PLATFORM SELECTION *
@@ -116,7 +119,7 @@ int main(int argc, char const *argv[]) {
     }
     else {
 
-        platform_id = (unsigned) std::stoi(platform_str);
+        platform_id = (uint)std::stoi(platform_str);
 
         if (platforms.size() <= platform_id) {
             print_message("Can not use platform #" + std::to_string(platform_id) + " (number of platforms: "
@@ -163,7 +166,7 @@ int main(int argc, char const *argv[]) {
     }
     else {
 
-        device_id = (unsigned) std::stoi(device_str);
+        device_id = (uint)std::stoi(device_str);
 
         if (devices.size() <= device_id) {
             print_message("Can not use device #" + std::to_string(device_id) + " (number of devices on selected platform: " +
@@ -201,18 +204,20 @@ int main(int argc, char const *argv[]) {
         if ((kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_LOCAL, 0) == 0) ||
             (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_GLOBAL, 0) == 0))
             continue;
-        print_message("Kernel arg " + std::to_string(i) + ": " + kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i) + '\t' +
-                                                     " type: " + kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i) + '\t' +
-                                             " address qual: " + resolve_address_qualifier(kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i)));
+        print_message("Kernel arg " + std::to_string(i)
+                                    + ": " + kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i)
+                                    + " (" + kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i)
+                                    + ", " + resolve_address_qualifier(kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i)) + ')'
+        );
     }
 
     /*** Step 2: create an object for each kernel argument ***/
-    bool is_buffer;
     kernel_args_t kernel_args;
     cl::Buffer counterBuffer;
 
     // an array of buffers for the kernel arguments
     cl::Buffer argumentBuffers[nargs];
+    std::vector<void *> arguments;
 
     // initialization of several random generators needed to populate args
     std::random_device rd;
@@ -221,71 +226,41 @@ int main(int argc, char const *argv[]) {
     std::uniform_int_distribution<cl_uint> uint_dis(0, LENGTH);
     std::uniform_real_distribution<cl_float> float_dis(-LENGTH, LENGTH);
 
-    for (unsigned i = 0; i < nargs; i++) {
+    for (uint i = 0; i < nargs; i++) {
+
         // check type of arg
-        std::string argtype(kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i));
-        is_buffer = (*(argtype.end() - 2) == '*');
+        std::string argtype_comp = kernel.getArgInfo<CL_KERNEL_ARG_TYPE_NAME>(i);
+        argtype_comp = argtype_comp.substr(0, argtype_comp.size() - 1);
+        size_t pos = argtype_comp.find("*");
+        auto [ argtype, is_buffer ] = pos == std::string::npos ?
+                                      std::make_pair(argtype_comp, false) :
+                                      std::make_pair(argtype_comp.substr(0, pos), true);
 
         // handle oclude counters in a special manner
         if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_LOCAL, 0) == 0)
             kernel.setArg(i, cl::Local(sizeof(cl_uint) * COUNTER_BUFFER_SIZE));
+
         else if (kernel.getArgInfo<CL_KERNEL_ARG_NAME>(i).rfind(OCLUDE_COUNTER_GLOBAL, 0) == 0) {
             kernel_args.push_back(v_uint(COUNTER_BUFFER_SIZE * WORK_GROUPS));
-            for (unsigned j = 0; j < COUNTER_BUFFER_SIZE * WORK_GROUPS; j++)
+            for (uint j = 0; j < COUNTER_BUFFER_SIZE * WORK_GROUPS; j++)
                 std::get<v_uint>(kernel_args.back())[j] = 0;
             argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_uint>(kernel_args.back())), end(std::get<v_uint>(kernel_args.back())), false);
             kernel.setArg(i, argumentBuffers[i]);
         }
 
-        else if (argtype.rfind("int", 0) == 0) {
+        // handle the real kernel arguments
+        else {
+            size_t nmemb = is_buffer ? LENGTH : 1;
+            auto [ argument, total_size ] = generate_kernel_argument(argtype, nmemb);
+            arguments.push_back(argument);
             if (is_buffer) {
-
-                if (kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i) == CL_KERNEL_ARG_ADDRESS_LOCAL)
-                    kernel.setArg(i, cl::Local(sizeof(cl_int) * COUNTER_BUFFER_SIZE));
-                else {
-                    kernel_args.push_back(v_int(LENGTH));
-                    for (unsigned j = 0; j < LENGTH; j++)
-                        std::get<v_int>(kernel_args.back())[j] = int_dis(gen);
-                    argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_int>(kernel_args.back())), end(std::get<v_int>(kernel_args.back())), false);
-                    kernel.setArg(i, argumentBuffers[i]);
-                }
-
+                argumentBuffers[i] = cl::Buffer(context, CL_MEM_READ_WRITE, total_size, argument);
+                kernel.setArg(i, argumentBuffers[i]);
             }
             else
-                kernel.setArg(i, int_dis(gen));
+                kernel.setArg(i, total_size, argument);
         }
-        else if (argtype.rfind("uint", 0) == 0) {
-            if (is_buffer) {
 
-                if (kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i) == CL_KERNEL_ARG_ADDRESS_LOCAL)
-                    kernel.setArg(i, cl::Local(sizeof(cl_int) * COUNTER_BUFFER_SIZE));
-                else {
-                    kernel_args.push_back(v_uint(LENGTH));
-                    for (unsigned j = 0; j < LENGTH; j++)
-                        std::get<v_uint>(kernel_args.back())[j] = uint_dis(gen);
-                    argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_uint>(kernel_args.back())), end(std::get<v_uint>(kernel_args.back())), false);
-                    kernel.setArg(i, argumentBuffers[i]);
-                }
-            }
-            else
-                kernel.setArg(i, uint_dis(gen));
-        }
-        else if (argtype.rfind("float", 0) == 0) {
-            if (is_buffer) {
-
-                if (kernel.getArgInfo<CL_KERNEL_ARG_ADDRESS_QUALIFIER>(i) == CL_KERNEL_ARG_ADDRESS_LOCAL)
-                    kernel.setArg(i, cl::Local(sizeof(cl_int) * COUNTER_BUFFER_SIZE));
-                else {
-                    kernel_args.push_back(v_float(LENGTH));
-                    for (unsigned j = 0; j < LENGTH; j++)
-                        std::get<v_float>(kernel_args.back())[j] = float_dis(gen);
-                    argumentBuffers[i] = cl::Buffer(context, begin(std::get<v_float>(kernel_args.back())), end(std::get<v_float>(kernel_args.back())), false);
-                    kernel.setArg(i, argumentBuffers[i]);
-                }
-            }
-            else
-                kernel.setArg(i, float_dis(gen));
-        }
     }
 
     /*** Step 3: run kernel ***/
@@ -298,13 +273,15 @@ int main(int argc, char const *argv[]) {
 
     /*** Step 5: aggregate instruction counts across work groups ***/
     v_uint finalCounter(COUNTER_BUFFER_SIZE, 0);
-    for (unsigned i = 0; i < COUNTER_BUFFER_SIZE; i++)
-        for (unsigned j = 0; j < WORK_GROUPS; j++)
+    for (uint i = 0; i < COUNTER_BUFFER_SIZE; i++)
+        for (uint j = 0; j < WORK_GROUPS; j++)
             finalCounter[i] += globalCounter[i + j * COUNTER_BUFFER_SIZE];
 
     /*** Step 6: report instruction counts ***/
-    for (unsigned i = 0; i < finalCounter.size(); i++)
+    for (uint i = 0; i < finalCounter.size(); i++)
         std::cout << i << ": " << finalCounter[i] << std::endl;
+
+    for (auto x : arguments) free(x);
 
     return 0;
 }

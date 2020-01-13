@@ -1,5 +1,6 @@
 hostcode-wrapper
 **/instrumentation-parser
+**/*.o
 **/*.cl
 **/*.ll
 **/*.bc
