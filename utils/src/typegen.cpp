@@ -9,7 +9,7 @@ void rand_fill(void *, size_t, limits_t);
 class typeinfo_t {
 
 private:
-	std::map< std::string, std::tuple<size_t, genfunc_t, limits_t> > helpmap =
+	std::unordered_map< std::string, std::tuple<size_t, genfunc_t, limits_t> > helpmap =
 	{
 		{ "int",   { sizeof(cl_int),   rand_fill<cl_int>,   std::pair<cl_int, cl_int>(0, 0)         } },
 		{ "uint",  { sizeof(cl_uint),  rand_fill<cl_uint>,  std::pair<cl_uint, cl_uint>(0u, 0u)     } },
