@@ -7,18 +7,25 @@ LDFLAGS=-lOpenCL
 CXXFLAGS_UTILS=-std=c++17 -O3 -Wall `llvm-config --cxxflags`
 LDFLAGS_UTILS=`llvm-config --ldflags --system-libs --libs all`
 
-default: hostcode-wrapper utils/instrumentation-parser
+SRC=utils/src
+BUILD=utils/build
+BIN=utils/bin
 
-typegen.o: typegen.cpp typegen.hpp
-	$(CXX) $(CXXFLAGS_UTILS) -o $@ $^ ${LDFLAGS_UTILS}
+default: $(BIN)/hostcode-wrapper $(BIN)/instrumentation-parser
 
-hostcode-wrapper: hostcode-wrapper.cpp utils/typegen.o
+$(BUILD)/typegen.o: $(SRC)/typegen.cpp $(SRC)/typegen.hpp
+	mkdir -p $(BUILD)
+	$(CXX) $(CXXFLAGS) -c -o $@ $< $(LDFLAGS)
+
+$(BIN)/hostcode-wrapper: $(SRC)/hostcode-wrapper.cpp $(BUILD)/typegen.o
+	mkdir -p $(BIN)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
-utils/instrumentation-parser: utils/instrumentation-parser.cpp
+$(BIN)/instrumentation-parser: $(SRC)/instrumentation-parser.cpp
+	mkdir -p $(BIN)
 	$(CXX) $(CXXFLAGS_UTILS) -o $@ $^ $(LDFLAGS_UTILS)
 
 clean:
-	$(RM) hostcode-wrapper utils/instrumentation-parser utils/*.o
+	$(RM) -rf $(BIN) $(BUILD)
 
 distclean: clean

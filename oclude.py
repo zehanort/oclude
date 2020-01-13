@@ -64,7 +64,7 @@ if args.size // args.work_groups <= 8:
 	if input() != 'y':
 		exit(0)
 
-hostcodeWrapper = './hostcode-wrapper'
+hostcodeWrapper = os.path.join(utils.bindir, 'hostcode-wrapper')
 hostcodeWrapperFlags = [
 	utils.tempfile,
 	args.kernel,

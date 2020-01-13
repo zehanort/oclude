@@ -10,7 +10,7 @@
     #include <CL/cl.hpp>
 #endif
 
-#include "utils/typegen.hpp"
+#include "typegen.hpp"
 
 #define OCLUDE_COUNTER_LOCAL  (std::string("ocludeHiddenCounterLocal"))
 #define OCLUDE_COUNTER_GLOBAL (std::string("ocludeHiddenCounterGlobal"))
@@ -22,8 +22,9 @@ private:
     std::string appname, prompt;
 public:
     MessagePrinter() {
-        std::string filename = std::string(__FILE__);
-        appname = filename.substr(0, filename.find_last_of("."));
+        appname = std::string(__FILE__);
+        appname = appname.substr(appname.find_last_of("/") + 1, appname.size() - 1);
+        appname = appname.substr(0, appname.find_last_of("."));
         prompt = "[" + appname + "] ";
     }
     void operator()(std::string message, bool nl=true) {

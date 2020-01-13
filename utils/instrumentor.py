@@ -59,7 +59,7 @@ hiddenCounterGlobalArgument = Decl(
 )
 
 ### 4th pass tools ###
-instrumentationGetter = os.path.join('utils', 'instrumentation-parser')
+instrumentationGetter = os.path.join(utils.bindir, 'instrumentation-parser')
 
 ### 5th pass tools ###
 cl2llCompiler = 'clang'
