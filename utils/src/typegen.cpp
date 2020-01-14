@@ -2,7 +2,7 @@
 
 /*
  * To add a new OpenCL primitive type, just add the type name (without "cl_") in the TYPELIST below,
- * making sure that the last one is inserted with LASTTYPE and not with TYPE (see default TYPELIST below)
+ * inside a TYPE macro (e.g. to add the type a_type, just add TYPE(a_type) to the TYPELIST)
  * !!! BE WARNED !!! This source code is NOT guaranteed to compile on every machine out there:
  * cl_bool and cl_ushort are emitted due to collisions with other types, and some of the existing ones
  * may lead to unpredicted collisions based on the underlying OS/hardware.
@@ -23,16 +23,27 @@
                  TYPE(ulong)    \
                  TYPE(float)    \
                  TYPE(double)   \
-                 LASTTYPE(half)
+                 TYPE(half)
 
-#define TYPE(X) LASTTYPE(X) DELIM
-#define LASTTYPE(X) EACH(X)
+/**************************************************
+ * WARNING: DO NOT EDIT ANYTHING BELOW THIS POINT *
+ **************************************************/
+
+#define EAT_DELIM()
+#define LPAREN (
+#define RPAREN )
+#define CAT(X, Y) X ## Y
+#define EXPAND(...) CAT(EAT, __VA_ARGS__)
+#define TYPE(X) _DELIM LPAREN RPAREN EACH(X)
+#define _DELIM() DELIM
+#define _COMMA() ,
+#define COMMA _COMMA LPAREN RPAREN
 
 namespace typegen {
 
-#define EACH(X) std::pair<CL(X), CL(X)>
+#define EACH(X) std::pair<CL(X) COMMA CL(X)>
 #define DELIM ,
-typedef std::variant<TYPELIST> limits_t;
+typedef std::variant<EXPAND(TYPELIST)> limits_t;
 #undef EACH
 #undef DELIM
 
@@ -45,9 +56,9 @@ class typeinfo_t {
 
 private:
 
-#define EACH(X) { #X, { sizeof(CL(X)), rand_fill<CL(X)>, std::pair<CL(X), CL(X)>(0, 0) } }
+#define EACH(X) { #X COMMA { sizeof(CL(X)) COMMA rand_fill<CL(X)> COMMA std::pair<CL(X) COMMA CL(X)>(0 COMMA 0) } }
 #define DELIM ,
-    std::unordered_map< std::string, std::tuple<size_t, genfunc_t, limits_t> > helpmap = { TYPELIST };
+    std::unordered_map< std::string, std::tuple<size_t, genfunc_t, limits_t> > helpmap = { EXPAND(TYPELIST) };
 #undef EACH
 #undef DELIM
 
@@ -100,15 +111,15 @@ void rand_fill(void * buf, size_t nmemb, limits_t limits) {
  * min limit -> the max between the type min value and -size
  * max limit -> the min between the type max value and size
  */
-#define EACH(X) std::get<std::pair<CL(X), CL(X)>>(typeinfo.get_limits(#X)) = \
-{                                                                            \
-    ( std::numeric_limits<CL(X)>::min() == 0 ? 0 :                           \
-        (CL(X))MAX(std::numeric_limits<CL(X)>::min(), -size)                 \
-    ),                                                                       \
-    ( (CL(X))MIN((long long)std::numeric_limits<CL(X)>::max(), size) )       \
+#define EACH(X) std::get<std::pair<CL(X) COMMA CL(X)>>(typeinfo.get_limits(#X)) = \
+{                                                                                 \
+    ( std::numeric_limits<CL(X)>::min() == 0 ? 0 :                                \
+        (CL(X))MAX(std::numeric_limits<CL(X)>::min(), -size)                      \
+    ) COMMA                                                                       \
+    ( (CL(X))MIN((long long)std::numeric_limits<CL(X)>::max(), size) )            \
 }
 #define DELIM ;
-void set_limits(int size) { TYPELIST; }
+void set_limits(int size) { EXPAND(TYPELIST); }
 #undef EACH
 #undef DELIM
 
