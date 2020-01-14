@@ -15,6 +15,8 @@ int main(int argc, char const *argv[]) {
         kernel_name,
         LENGTH,
         WORK_GROUPS,
+        instcounts,
+        timeit,
         platform_id,
         device_id
     ] = oclutils.parse_arguments(argc, argv);
@@ -49,14 +51,34 @@ int main(int argc, char const *argv[]) {
 
     /*** Step 3: run kernel ***/
     print_message("Enqueuing kernel with Global NDRange = " + std::to_string(LENGTH) + " and Local NDRange = " + std::to_string(LENGTH / WORK_GROUPS));
-    queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(LENGTH), cl::NDRange(LENGTH / WORK_GROUPS));
 
-    /*** Step 4: read counter buffer ***/
-    std::vector<uint> globalCounter(COUNTER_BUFFER_SIZE * WORK_GROUPS);
-    queue.enqueueReadBuffer(oclutils.get_global_counter(), CL_TRUE, 0, sizeof(cl_uint) * COUNTER_BUFFER_SIZE * WORK_GROUPS, globalCounter.data());
+    cl::Event event;
+    if (timeit) {
+        queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(LENGTH), cl::NDRange(LENGTH / WORK_GROUPS), NULL, &event);
+        cl::Event::waitForEvents(std::vector<cl::Event>{ event });
+    }
+    else
+        queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(LENGTH), cl::NDRange(LENGTH / WORK_GROUPS));
 
-    /*** Step 5: aggregate instruction counts across work groups and report them ***/
-    oclutils.report_instruction_counts(globalCounter, WORK_GROUPS);
+    queue.finish();
+
+    /*** Step 4: report what the user requested, if anything ***/
+    if (instcounts) {
+        /*** read counter buffer ***/
+        std::vector<uint> globalCounter(COUNTER_BUFFER_SIZE * WORK_GROUPS);
+        queue.enqueueReadBuffer(oclutils.get_global_counter(), CL_TRUE, 0, sizeof(cl_uint) * COUNTER_BUFFER_SIZE * WORK_GROUPS, globalCounter.data());
+
+        /*** aggregate instruction counts across work groups and report them ***/
+        oclutils.report_instruction_counts(globalCounter, WORK_GROUPS);
+    }
+
+    if (timeit) {
+        /*** report execution time ***/
+        auto time_start  = event.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+        auto time_end    = event.getProfilingInfo<CL_PROFILING_COMMAND_END>();
+        double exec_time = time_end - time_start;
+        std::cout << "time(ns):" << exec_time << std::endl;
+    }
 
     return 0;
 }

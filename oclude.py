@@ -48,6 +48,18 @@ parser.add_argument('-v', '--verbose',
 	action='store_true'
 )
 
+parser.add_argument('-i', '--inst-counts',
+	help='count the LLVM instructions that were executed and dump them to stdout',
+	dest='instcounts',
+	action='store_true'
+)
+
+parser.add_argument('-t', '--time-it',
+	help='measure kernel execution time',
+	dest='timeit',
+	action='store_true'
+)
+
 args = parser.parse_args()
 
 interact = utils.Interactor(__file__.split(os.sep)[-1])
@@ -59,6 +71,13 @@ if not os.path.exists(utils.cfg.clcHeaderFile) or not os.path.exists(utils.cfg.l
 	interact('Have you set them correctly before running oclude?')
 	interact('If not, they are located in the file ' + os.path.abspath(os.path.join('utils', 'cfg', '__init__.py')))
 	exit(1)
+
+if args.instcounts and args.timeit:
+	interact('WARNING: Instruction count and execution time measurement were both requested.')
+	interact('This will result in the time measurement of the instrumented kernel and not the original.')
+	interact('Proceed? [y/N] ', nl=False)
+	if input() != 'y':
+		exit(0)
 
 if args.size < args.work_groups or args.size % args.work_groups != 0:
 	interact('size must be a multiple of work_groups')
@@ -76,6 +95,8 @@ hostcodeWrapperFlags = [
 	args.kernel,
 	str(args.size),
 	str(args.work_groups),
+	'y' if args.instcounts else 'n',
+	'y' if args.timeit else 'n',
 	str(args.platform),
 	str(args.device)
 ]
@@ -92,23 +113,33 @@ os.remove(utils.tempfile)
 interact('Kernel run completed successfully')
 
 ### STEP 3: parse hostcode-wrapper output ###
-instcounts = sorted(
-	[
-		(utils.llvm_instructions[instIdx], instCnt)
-		for instIdx, instCnt in map(
-			lambda x : map(int, x),
-			map(
-				lambda x : x.split(':'),
-				cmdout.splitlines()
-			)
-		)
-		if instCnt != 0
-	],
-	key=lambda x : x[1],
-	reverse=True
-)
+cmdout = cmdout.splitlines()
 
-### STEP 4: dump an oclgrind-like output ###
-print(f"Instructions executed for kernel '{args.kernel}':")
-for instName, instCnt in instcounts:
-	print(f'{instCnt : 16} - {instName}')
+if args.timeit:
+	nsecs = float(cmdout[-1].split(':')[1])
+	cmdout = cmdout[:-1]
+
+if args.instcounts:
+	instcounts = sorted(
+		[
+			(utils.llvm_instructions[instIdx], instCnt)
+			for instIdx, instCnt in map(
+				lambda x : map(int, x),
+				map(lambda x : x.split(':'), cmdout)
+			)
+			if instCnt != 0
+		],
+		key=lambda x : x[1],
+		reverse=True
+	)
+
+### STEP 4: dump an oclgrind-like output (if requested by user) ###
+if args.instcounts:
+	print(f"Instructions executed for kernel '{args.kernel}':")
+	for instName, instCnt in instcounts:
+		print(f'{instCnt : 16} - {instName}')
+
+if args.timeit:
+	print(f"Execution time for kernel '{args.kernel}':")
+	print('ns:', nsecs)
+	print('ms:', nsecs / 1000000.0)

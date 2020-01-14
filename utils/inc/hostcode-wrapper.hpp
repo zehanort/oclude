@@ -20,10 +20,10 @@
 #define OCLUDE_COUNTER_GLOBAL (std::string("ocludeHiddenCounterGlobal"))
 #define COUNTER_BUFFER_SIZE   74
 
-using args_t         = std::tuple<std::string, std::string, uint, uint, int, int>;
+using args_t         = std::tuple<std::string, std::string, uint, uint, bool, bool, int, int>;
 using kernel_setup_t = std::pair<cl::Kernel, cl::CommandQueue>;
 
-MessagePrinter print_message(__FILE__, "<file> <kernel> <size> <work groups> [<platform>] [<device>]");
+MessagePrinter print_message(__FILE__, "<file> <kernel> <size> <work groups> [ <instcounts (y/n)> [<timeit (y/n)> [<platform> [<device>] ] ] ]");
 
 /* a class to export some boilerplate functionality of the OpenCL runtime to the hostcode */
 class OpenCLutils {
@@ -38,6 +38,7 @@ private:
     cl::Buffer counterBuffer;
     cl::Buffer *argumentBuffers;    // an array of buffers for the kernel arguments
     std::vector<void *> arguments;    
+    bool timeit;
 
 public:
 
@@ -48,9 +49,11 @@ public:
         std::string kernel_name = argv[2];
         uint LENGTH = std::stoi(argv[3]);
         uint WORK_GROUPS = std::stoi(argv[4]);
-        int platform_idx = (argc > 5 ? std::stoi(argv[5]) : -1);
-        int device_idx   = (argc > 6 ? std::stoi(argv[6]) : -1);
-        return { kernel_file, kernel_name, LENGTH, WORK_GROUPS, platform_idx, device_idx };
+        bool instcounts  = argc > 5 && *argv[5] == 'y';
+        timeit           = argc > 6 && *argv[6] == 'y';
+        int platform_idx = (argc > 7 ? std::stoi(argv[7]) : -1);
+        int device_idx   = (argc > 8 ? std::stoi(argv[8]) : -1);
+        return { kernel_file, kernel_name, LENGTH, WORK_GROUPS, instcounts, timeit, platform_idx, device_idx };
     }
 
     inline auto cl_get_platform(int platform_id) {
@@ -156,7 +159,10 @@ public:
             print_message("Error building: " + program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device));
             exit(1);
         }
-        queue = cl::CommandQueue(context, device);
+        if (timeit)
+            queue = cl::CommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE);
+        else
+            queue = cl::CommandQueue(context, device);
         return { cl::Kernel(program, kernel_name.c_str()), queue };
     }
 
