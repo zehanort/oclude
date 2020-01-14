@@ -1,8 +1,8 @@
 #include "typegen.hpp"
 
 /*
- * To add a new OpenCL primitive type,
- * just add the type name (without "cl_") in the TYPELIST below, in the proper way (delims between types)
+ * To add a new OpenCL primitive type, just add the type name (without "cl_") in the TYPELIST below,
+ * making sure that the last one is inserted with LASTTYPE and not with TYPE (see default TYPELIST below)
  * !!! BE WARNED !!! This source code is NOT guaranteed to compile on every machine out there:
  * cl_bool and cl_ushort are emitted due to collisions with other types, and some of the existing ones
  * may lead to unpredicted collisions based on the underlying OS/hardware.
@@ -14,25 +14,19 @@
 // NOTE: cl_bool is the same as cl_uint (that is, unsigned int), so it is emitted from limits_t
 // NOTE: cl_ushort breaks the helpmap, because ushort is basically half
 
-#define TYPELIST EACH(char)   \
-                 DELIM        \
-                 EACH(uchar)  \
-                 DELIM        \
-                 EACH(short)  \
-                 DELIM        \
-                 EACH(int)    \
-                 DELIM        \
-                 EACH(uint)   \
-                 DELIM        \
-                 EACH(long)   \
-                 DELIM        \
-                 EACH(ulong)  \
-                 DELIM        \
-                 EACH(float)  \
-                 DELIM        \
-                 EACH(double) \
-                 DELIM        \
-                 EACH(half)
+#define TYPELIST TYPE(char)     \
+                 TYPE(uchar)    \
+                 TYPE(short)    \
+                 TYPE(int)      \
+                 TYPE(uint)     \
+                 TYPE(long)     \
+                 TYPE(ulong)    \
+                 TYPE(float)    \
+                 TYPE(double)   \
+                 LASTTYPE(half)
+
+#define TYPE(X) LASTTYPE(X) DELIM
+#define LASTTYPE(X) EACH(X)
 
 namespace typegen {
 
