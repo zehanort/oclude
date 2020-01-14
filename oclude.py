@@ -55,7 +55,7 @@ parser.add_argument('-i', '--inst-counts',
 )
 
 parser.add_argument('-t', '--time-it',
-	help='measure kernel execution time',
+	help='measure kernel execution time and dump it to stdout',
 	dest='timeit',
 	action='store_true'
 )
