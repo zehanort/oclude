@@ -16,8 +16,8 @@ missingCurlyBracesAdder = 'clang-tidy'
 missingCurlyBracesAdderFlags = ['-fix',
                                 '-checks="readability-braces-around-statements"',
                                 '--',
-                                '-include', '/home/sotiris/projects/llvm-project/libclc/generic/include/clc/clc.h',
-                                '-isystem', '/home/sotiris/projects/llvm-project/libclc/generic/include/']
+                                '-include', utils.cfg.clcHeaderFile,
+                                '-isystem', utils.cfg.libclcIncludePath]
 
 ### 2nd pass tools ###
 braceBreaker = 'clang-format'

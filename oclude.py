@@ -54,6 +54,12 @@ interact = utils.Interactor(__file__.split(os.sep)[-1])
 interact.set_verbosity(args.verbose)
 
 # some sanity checks
+if not os.path.exists(utils.cfg.clcHeaderFile) or not os.path.exists(utils.cfg.libclcIncludePath):
+	interact('ERROR: paths to libclc header file and/or include directory are invalid.')
+	interact('Have you set them correctly before running oclude?')
+	interact('If not, they are located in the file ' + os.path.abspath(os.path.join('utils', 'cfg', '__init__.py')))
+	exit(1)
+
 if args.size < args.work_groups or args.size % args.work_groups != 0:
 	interact('size must be a multiple of work_groups')
 	exit(1)
@@ -77,7 +83,7 @@ hostcodeWrapperFlags = [
 ### STEP 1: instrument input source file ###
 ###  the final code ends up in tempfile  ###
 interact('Instrumenting source code')
-utils.instrument_file(args.infile, args.verbose)
+utils.instrument_file(os.path.abspath(args.infile), args.verbose)
 
 ### STEP 2: run the kernel ###
 cmdout, cmderr = interact.run_command(f'Running kernel {args.kernel} from file {args.infile}', hostcodeWrapper, *hostcodeWrapperFlags)

@@ -1,3 +1,5 @@
+from .cfg import *
+
 from .utils import (
 	Interactor,
 	bindir, tempfile, templlvm,
