@@ -105,6 +105,14 @@ def instrument_file(file, verbose):
         if func.decl.name in kernelFuncs:
             func.decl.type.args.params.append(hiddenCounterGlobalArgument)
 
+    # there may be (helper) functions with the attribute "inline"
+    # we need to avoid them, but to remember them in order to restore them later
+    inlinedLines = []
+    for func in ASTfunctions:
+        if 'inline' in func.decl.funcspec:
+            inlinedLines.append(func.coord.line)
+            func.decl.funcspec = [x for x in func.decl.funcspec if x != 'inline']
+
     gen = OpenCLCGenerator()
     old_visit_FuncCall = gen.visit_FuncCall
 
@@ -136,9 +144,25 @@ def instrument_file(file, verbose):
     interact.run_command(
         'Compiling source to LLVM bitcode (1/2)', cl2llCompiler, *cl2llCompilerFlags, '-fno-inline', '-o', utils.templlvm, utils.tempfile
     )
+
     instrumentation_data, _ = interact.run_command(
         'Retrieving instrumentation data from LLVM bitcode', instrumentationGetter, utils.templlvm
     )
+
+    # there may be a need to restore the "inline" function attribute in some functions at this point
+    if inlinedLines:
+
+        with open(utils.tempfile, 'r') as f:
+            src = f.read().splitlines(keepends=True)
+
+        # restore "inline" function attribute wherever it was emitted
+        for line in inlinedLines:
+            src[line - 1] = 'inline ' + src[line - 1]
+
+        with open(utils.tempfile, 'w') as f:
+            f.writelines(src)
+    # "inline" function attribute restored at this point, if it was needed to
+
     _, inliner_report = interact.run_command(
         'Compiling source to LLVM bitcode (2/2)', cl2llCompiler, *cl2llCompilerFlags, '-Rpass=inline', '-o', utils.templlvm, utils.tempfile
     )
