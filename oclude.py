@@ -160,11 +160,6 @@ hostcodeWrapperFlags = [
 
 cmdout, cmderr = interact.run_command(f'Running kernel {args.kernel} from file {args.infile}', hostcodeWrapper, *hostcodeWrapperFlags)
 
-# last sanity check
-if 'CL_INVALID_KERNEL_NAME' in cmderr:
-	interact(f"ERROR: No kernel function named '{args.kernel}' exists in file {arg.infile}")
-	exit(1)
-
 interact(cmderr, prompt=False, nl=False)
 interact('Kernel run completed successfully')
 
