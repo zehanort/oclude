@@ -47,7 +47,6 @@ llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
 
 bindir = os.path.abspath(os.path.join('utils', 'bin'))
 
-tempfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.oclude_tmp_instr_src.cl')
 templlvm = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.oclude_tmp_instr_ll.ll')
 
 hidden_counter_name_local = 'ocludeHiddenCounterLocal'

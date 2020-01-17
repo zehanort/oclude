@@ -89,9 +89,66 @@ if args.size // args.work_groups <= 8:
 	if input() != 'y':
 		exit(0)
 
+### STEP 0: check our database for this file  ###
+### if the file exists, just run it           ###
+### if the file does not exist, instrument it ###
+### if the database does not exist, create it ###
+cache = utils.CachedFiles()
+
+if cache.exists() and cache.file_is_cached(args.infile):
+	interact(f'INFO: Input file {args.infile} is cached; working with it')
+	infile = cache.get_file(args.infile)
+
+else:
+
+	if not cache.exists():
+		interact('INFO: Cached files directory does not exist, creating it... ', nl=False)
+		cache.create()
+		interact('done', prompt=False)
+
+	else: # else cache exists but does not have the input file
+		interact(f'INFO: Input file {args.infile} is not cached; need to instrument and cache it')
+
+	infile = cache.create_file(args.infile)
+
+	### STEP 1: instrument input source file ###
+	###  the final code ends up in tempfile  ###
+	interact('Instrumenting source code')
+	kernels = utils.instrument_file(infile, args.verbose)
+	cache.cache_file_kernels(infile, kernels)
+
+# a last sanity check
+file_kernels = cache.get_file_kernels(infile)
+if args.kernel not in file_kernels:
+	interact(f"ERROR: No kernel function named '{args.kernel}' exists in file '{args.infile}'")
+	interact(f"A list of the kernels that exist in file '{args.infile}':")
+	for i, kernel in enumerate(file_kernels, 1):
+		interact(f'\t{i}. {kernel}')
+	# only one kernel
+	if len(file_kernels) == 1:
+		interact('Do you want to run the above kernel? [Y/n] ', nl=False)
+		if input() == 'n':
+			exit(0)
+		else:
+			inp = 0
+	# > 1 kernels
+	else:
+		interact('Do you want to run one of the above? If yes, type the number on its left. If no, just hit <Enter>: ', nl=False)
+		inp = input()
+		if not inp:
+			exit(0)
+		else:
+			inp = int(inp) - 1
+			if not 0 <= inp < len(file_kernels):
+				interact(f'Should have chosen between 1 and {len(file_kernels)}. Please try again')
+				exit(1)
+	args.kernel = file_kernels[inp]
+	interact(f"Continuing with kernel '{args.kernel}'")
+
+### STEP 2: run the kernel ###
 hostcodeWrapper = os.path.join(utils.bindir, 'hostcode-wrapper')
 hostcodeWrapperFlags = [
-	utils.tempfile,
+	infile,
 	args.kernel,
 	str(args.size),
 	str(args.work_groups),
@@ -101,15 +158,14 @@ hostcodeWrapperFlags = [
 	str(args.device)
 ]
 
-### STEP 1: instrument input source file ###
-###  the final code ends up in tempfile  ###
-interact('Instrumenting source code')
-utils.instrument_file(os.path.abspath(args.infile), args.verbose)
-
-### STEP 2: run the kernel ###
 cmdout, cmderr = interact.run_command(f'Running kernel {args.kernel} from file {args.infile}', hostcodeWrapper, *hostcodeWrapperFlags)
+
+# last sanity check
+if 'CL_INVALID_KERNEL_NAME' in cmderr:
+	interact(f"ERROR: No kernel function named '{args.kernel}' exists in file {arg.infile}")
+	exit(1)
+
 interact(cmderr, prompt=False, nl=False)
-os.remove(utils.tempfile)
 interact('Kernel run completed successfully')
 
 ### STEP 3: parse hostcode-wrapper output ###

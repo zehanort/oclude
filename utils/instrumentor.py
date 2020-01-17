@@ -78,20 +78,20 @@ def instrument_file(file, verbose):
     # step 1: remove comments / preprocess #
     ########################################
     cmdout, _ = interact.run_command('Preprocessing source file', preprocessor, file)
-    with open(utils.tempfile, 'w') as f:
+    with open(file, 'w') as f:
         f.writelines(filter(lambda line : line.strip() and not line.startswith('#'), cmdout.splitlines(keepends=True)))
 
     ####################################
     # step 2: add missing curly braces #
     ####################################
-    interact.run_command('Adding missing curly braces', missingCurlyBracesAdder, utils.tempfile, *missingCurlyBracesAdderFlags)
+    interact.run_command('Adding missing curly braces', missingCurlyBracesAdder, file, *missingCurlyBracesAdderFlags)
 
     ##################################################
     # step 3: add hidden counter argument in kernels #
     ##################################################
     parser = OpenCLCParser()
 
-    with open(utils.tempfile, 'r') as f:
+    with open(file, 'r') as f:
         ast = parser.parse(f.read())
 
     ASTfunctions = list(filter(lambda x : isinstance(x, FuncDef), ast))
@@ -123,14 +123,14 @@ def instrument_file(file, verbose):
 
     gen.visit_FuncCall = types.MethodType(new_visit_FuncCall, gen)
 
-    with open(utils.tempfile, 'w') as f:
+    with open(file, 'w') as f:
         f.write(gen.visit(ast))
 
     #################################################
     # step 4: add new line before every curly brace #
     #################################################
-    cmdout, _ = interact.run_command('Breaking curly braces', braceBreaker, *braceBreakerFlags, utils.tempfile)
-    with open(utils.tempfile, 'w') as f:
+    cmdout, _ = interact.run_command('Breaking curly braces', braceBreaker, *braceBreakerFlags, file)
+    with open(file, 'w') as f:
         f.writelines(filter(lambda line : line.strip(), cmdout.splitlines(keepends=True)))
 
     #########################################################################
@@ -142,7 +142,7 @@ def instrument_file(file, verbose):
     # WITHOUT allowing function inlining (to get pure data for each function)
 
     interact.run_command(
-        'Compiling source to LLVM bitcode (1/2)', cl2llCompiler, *cl2llCompilerFlags, '-fno-inline', '-o', utils.templlvm, utils.tempfile
+        'Compiling source to LLVM bitcode (1/2)', cl2llCompiler, *cl2llCompilerFlags, '-fno-inline', '-o', utils.templlvm, file
     )
 
     instrumentation_data, _ = interact.run_command(
@@ -152,19 +152,19 @@ def instrument_file(file, verbose):
     # there may be a need to restore the "inline" function attribute in some functions at this point
     if inlinedLines:
 
-        with open(utils.tempfile, 'r') as f:
+        with open(file, 'r') as f:
             src = f.read().splitlines(keepends=True)
 
         # restore "inline" function attribute wherever it was emitted
         for line in inlinedLines:
             src[line - 1] = 'inline ' + src[line - 1]
 
-        with open(utils.tempfile, 'w') as f:
+        with open(file, 'w') as f:
             f.writelines(src)
     # "inline" function attribute restored at this point, if it was needed to
 
     _, inliner_report = interact.run_command(
-        'Compiling source to LLVM bitcode (2/2)', cl2llCompiler, *cl2llCompilerFlags, '-Rpass=inline', '-o', utils.templlvm, utils.tempfile
+        'Compiling source to LLVM bitcode (2/2)', cl2llCompiler, *cl2llCompilerFlags, '-Rpass=inline', '-o', utils.templlvm, file
     )
     os.remove(utils.templlvm)
 
@@ -175,21 +175,21 @@ def instrument_file(file, verbose):
         instrumentation_data = instrumentation_data.replace(inline_line + ':call', inline_line + ':retNOT', 1)
 
     # now add them to the source file, eventually instrumenting it
-    utils.add_instrumentation_data_to_file(utils.tempfile, kernelFuncs, instrumentation_data)
+    utils.add_instrumentation_data_to_file(file, kernelFuncs, instrumentation_data)
 
     # instrumentation is done! Congrats!
 
     if verbose:
 
-        cmdout, _ = interact.run_command('Prettifing instrumented source code', braceBreaker, *braceBreakerFlags, utils.tempfile)
-        with open(utils.tempfile, 'w') as f:
+        cmdout, _ = interact.run_command('Prettifing instrumented source code', braceBreaker, *braceBreakerFlags, file)
+        with open(file, 'w') as f:
             f.write(cmdout)
 
         interact('Final instrumented source code for inspection:')
         interact('============================================================================', nl=False)
         interact('============================================================================', prompt=False)
 
-        with open(utils.tempfile, 'r') as f:
+        with open(file, 'r') as f:
             for line in f.readlines():
                 interact(line, prompt=False, nl=False)
 
@@ -197,3 +197,6 @@ def instrument_file(file, verbose):
         interact('============================================================================', prompt=False)
 
     interact('Intrumentation completed successfully')
+
+    # needed by oclude for a last sanity check
+    return kernelFuncs
