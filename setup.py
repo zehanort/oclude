@@ -10,7 +10,7 @@ setup(
     url =              'https://github.com/zehanort/oclude',
 
     py_modules =       ['oclude'],
-    install_requires = ['argparse', 'pycparserext', 'pycparser'],
+    install_requires = ['pycparser>=2.18,<2.20', 'pycparserext==2019.1'],
     entry_points =     { 'console_scripts': ['oclude=oclude:run'] },
     packages =         ['utils']
 )
