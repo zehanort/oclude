@@ -179,11 +179,12 @@ def instrument_file(file, verbose):
 
     # instrumentation is done! Congrats!
 
-    if verbose:
+    # store a prettified (i.e. easier to read/inspect) format in the cache
+    cmdout, _ = interact.run_command('Prettifing instrumented source code', braceBreaker, *braceBreakerFlags, file)
+    with open(file, 'w') as f:
+        f.write(cmdout)
 
-        cmdout, _ = interact.run_command('Prettifing instrumented source code', braceBreaker, *braceBreakerFlags, file)
-        with open(file, 'w') as f:
-            f.write(cmdout)
+    if verbose:
 
         interact('Final instrumented source code for inspection:')
         interact('============================================================================', nl=False)
