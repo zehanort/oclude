@@ -6,3 +6,5 @@
 **/*.pyc
 **/lextab.py
 **/yacctab.py
+**/env
+**/*.egg-info

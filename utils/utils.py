@@ -45,7 +45,7 @@ llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
                      'icmp', 'fcmp', 'phi', 'select', 'freeze', 'call', 'va_arg',
                      'landingpad', 'catchpad', 'cleanuppad']
 
-bindir = os.path.abspath(os.path.join('utils', 'bin'))
+bindir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin')
 
 templlvm = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.oclude_tmp_instr_ll.ll')
 
