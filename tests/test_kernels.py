@@ -33,7 +33,7 @@ def check(kernelfile, kernels):
         command = f'oclude {kernelfilepath} -k {kernel} -s {SIZE} -w {WORK_GROUPS} -i'
         cmdout = sp.run(command, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
         output = cmdout.stdout.decode('ascii')
-        error  = '\n'.join(filter(lambda line : not line.startswith('['), cmdout.stderr.decode('ascii').splitlines()))
+        error = cmdout.stderr.decode('ascii')
         if not output or cmdout.returncode != 0:
             errors.append(f'ERROR OCCURED from {kernelfile}:{kernel}\nstderr:\n{error}\n')
         if len(output.splitlines()) == 1:
