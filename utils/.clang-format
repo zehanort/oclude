@@ -1,0 +1,14 @@
+BraceWrapping:
+    AfterClass:            true
+    AfterControlStatement: Always
+    AfterEnum:             true
+    AfterFunction:         true
+    AfterNamespace:        true
+    AfterObjCDeclaration:  true
+    AfterStruct:           true
+    AfterUnion:            true
+    BeforeCatch:           false
+    BeforeElse:            false
+    IndentBraces:          false
+BreakBeforeBraces: Custom
+ColumnLimit:       0

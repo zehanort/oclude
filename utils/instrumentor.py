@@ -22,7 +22,7 @@ missingCurlyBracesAdderFlags = ['-fix',
 
 ### 2nd pass tools ###
 braceBreaker = 'clang-format'
-braceBreakerFlags = ['-style="{BreakBeforeBraces: Allman, ColumnLimit: 0}"']
+braceBreakerFlags = ['-style=file']
 
 ### 3rd pass tools (python native) ###
 hiddenCounterLocalArgument = Decl(
