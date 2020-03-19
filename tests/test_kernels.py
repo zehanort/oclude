@@ -34,6 +34,12 @@ def check(kernelfile, kernels):
         cmdout = sp.run(command, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
         output = cmdout.stdout.decode('ascii')
         error  = '\n'.join(filter(lambda line : not line.startswith('['), cmdout.stderr.decode('ascii').splitlines()))
+
+        print('!!! OUTPUT !!!')
+        print(output)
+        print('!!! ERROR !!!')
+        print(error)
+
         if not output or cmdout.returncode != 0:
             errors.append(f'ERROR OCCURED from {kernelfile}:{kernel}\nstderr:\n{error}\n')
         if len(output.splitlines()) == 1:

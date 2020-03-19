@@ -6,6 +6,8 @@
 //	DEFINE
 //======================================================================================================================================================150
 
+#define DEFAULT_ORDER_2 256
+
 // double precision support (switch between as needed for NVIDIA/AMD)
 #ifdef AMDAPP
 #pragma OPENCL EXTENSION cl_amd_fp64 : enable
@@ -36,13 +38,13 @@ typedef struct knode {
 	int  keys [DEFAULT_ORDER_2 + 1];
 	bool is_leaf;
 	int num_keys;
-} knode; 
+} knode;
 
 //========================================================================================================================================================================================================200
 //	findRangeK function
 //========================================================================================================================================================================================================200
 
-__kernel void 
+__kernel void
 findRangeK(	long height,
 			__global knode *knodesD,
 			long knodes_elem,
@@ -53,7 +55,7 @@ findRangeK(	long height,
 			__global long *offset_2D,
 			__global int *startD,
 			__global int *endD,
-			__global int *RecstartD, 
+			__global int *RecstartD,
 			__global int *ReclenD)
 {
 

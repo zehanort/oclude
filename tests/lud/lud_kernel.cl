@@ -1,10 +1,11 @@
-// #define BLOCK_SIZE 16
-__kernel void 
-lud_diagonal(__global float *m, 
+#define BLOCK_SIZE 256
+
+__kernel void
+lud_diagonal(__global float *m,
 			 __local  float *shadow,
-			 int   matrix_dim, 
+			 int   matrix_dim,
 			 int   offset)
-{ 
+{
 	int i,j;
 	int tx = get_local_id(0);
 
@@ -13,9 +14,9 @@ lud_diagonal(__global float *m,
 		shadow[i * BLOCK_SIZE + tx]=m[array_offset + tx];
 		array_offset += matrix_dim;
 	}
-  
+
 	barrier(CLK_LOCAL_MEM_FENCE);
-  
+
 	for(i=0; i < BLOCK_SIZE-1; i++) {
 
     if (tx>i){
@@ -30,7 +31,7 @@ lud_diagonal(__global float *m,
       for(j=0; j < i+1; j++)
         shadow[(i+1) * BLOCK_SIZE + tx] -= shadow[(i+1) * BLOCK_SIZE + j]*shadow[j * BLOCK_SIZE + tx];
     }
-    
+
 	barrier(CLK_LOCAL_MEM_FENCE);
     }
 
@@ -39,21 +40,21 @@ lud_diagonal(__global float *m,
       m[array_offset+tx]=shadow[i * BLOCK_SIZE + tx];
       array_offset += matrix_dim;
     }
-  
+
 }
 
 __kernel void
-lud_perimeter(__global float *m, 
+lud_perimeter(__global float *m,
 			  __local  float *dia,
 			  __local  float *peri_row,
 			  __local  float *peri_col,
-			  int matrix_dim, 
+			  int matrix_dim,
 			  int offset)
 {
     int i,j, array_offset;
     int idx;
 
-    int  bx = get_group_id(0);	
+    int  bx = get_group_id(0);
     int  tx = get_local_id(0);
 
     if (tx < BLOCK_SIZE) {
@@ -63,7 +64,7 @@ lud_perimeter(__global float *m,
       dia[i * BLOCK_SIZE + idx]=m[array_offset+idx];
       array_offset += matrix_dim;
       }
-    
+
     array_offset = offset*matrix_dim+offset;
     for (i=0; i < BLOCK_SIZE; i++) {
       peri_row[i * BLOCK_SIZE+ idx]=m[array_offset+(bx+1)*BLOCK_SIZE+idx];
@@ -72,19 +73,19 @@ lud_perimeter(__global float *m,
 
     } else {
     idx = tx-BLOCK_SIZE;
-    
+
     array_offset = (offset+BLOCK_SIZE/2)*matrix_dim+offset;
     for (i=BLOCK_SIZE/2; i < BLOCK_SIZE; i++){
       dia[i * BLOCK_SIZE + idx]=m[array_offset+idx];
       array_offset += matrix_dim;
     }
-    
+
     array_offset = (offset+(bx+1)*BLOCK_SIZE)*matrix_dim+offset;
     for (i=0; i < BLOCK_SIZE; i++) {
       peri_col[i * BLOCK_SIZE + idx] = m[array_offset+idx];
       array_offset += matrix_dim;
     }
-  
+
    }
     barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -104,7 +105,7 @@ lud_perimeter(__global float *m,
    }
 
 	barrier(CLK_LOCAL_MEM_FENCE);
-    
+
   if (tx < BLOCK_SIZE) { //peri-row
     idx=tx;
     array_offset = (offset+1)*matrix_dim+offset;
@@ -124,16 +125,16 @@ lud_perimeter(__global float *m,
 }
 
 __kernel void
-lud_internal(__global float *m, 
+lud_internal(__global float *m,
 			 __local  float *peri_row,
 			 __local  float *peri_col,
-			int matrix_dim, 
+			int matrix_dim,
 			int offset)
 {
-  
-  int  bx = get_group_id(0);	
-  int  by = get_group_id(1);	
-  
+
+  int  bx = get_group_id(0);
+  int  by = get_group_id(1);
+
   int  tx = get_local_id(0);
   int  ty = get_local_id(1);
 
@@ -155,8 +156,3 @@ lud_internal(__global float *m,
 
 
 }
-
-
-
-
-
