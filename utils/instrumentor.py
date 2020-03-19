@@ -17,7 +17,8 @@ missingCurlyBracesAdderFlags = ['-fix',
                                 '-checks="readability-braces-around-statements"',
                                 '--',
                                 '-include', utils.cfg.clcHeaderFile,
-                                '-isystem', utils.cfg.libclcIncludePath]
+                                '-isystem', utils.cfg.libclcIncludePath,
+                                '-cl-std=CL2.0']
 
 ### 2nd pass tools ###
 braceBreaker = 'clang-format'
