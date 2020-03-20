@@ -1,3 +1,4 @@
+import pytest
 import os, shutil
 import subprocess as sp
 
@@ -5,6 +6,20 @@ import subprocess as sp
 testdir = os.path.dirname(os.path.abspath(__file__))
 SIZE = 1024
 WORK_GROUPS = 8
+
+@pytest.yield_fixture(scope='session', autouse=True)
+def clear_cache_after_testing():
+    yield ### cleanup ###
+    cachedir = os.path.join(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0], 'utils', '.cache')
+    for filename in os.listdir(cachedir):
+        file_path = os.path.join(cachedir, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 ### this is the main tester for all kernel files ###
 def check(kernelfile, kernels):

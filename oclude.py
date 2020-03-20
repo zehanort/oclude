@@ -60,6 +60,25 @@ parser.add_argument('-t', '--time-it',
     action='store_true'
 )
 
+# cache flags #
+parser.add_argument('--clear-cache',
+    help='remove every cached info (irreversible)',
+    dest='clear_cache',
+    action='store_true'
+)
+
+parser.add_argument('--ignore-cache',
+    help='do not use (possibly) cached info regarding the provided kernel file',
+    dest='ignore_cache',
+    action='store_true'
+)
+
+parser.add_argument('--no-cache-warnings',
+    help='suppress cache-related warnings (e.g. cache too large)',
+    dest='no_cache_warnings',
+    action='store_true'
+)
+
 ###############################
 ### MAIN FUNCTION OF OCLUDE ###
 ###############################
@@ -115,13 +134,24 @@ def run():
 
     cache = utils.CachedFiles()
 
-    is_cached = cache.file_is_cached(args.infile)
-    interact(f"INFO: Input file {args.infile} is {'' if is_cached else 'not '}cached")
+    if cache.size > 10 * 1024 * 1024 and not args.no_cache_warnings:
+        interact('WARNING: Cache size exceeds 10 MiB, which is a lot. Consider running oclude with `--clear-cache`')
+
+    if args.clear_cache:
+        interact('INFO: Clearing cache')
+        cache.clear()
+
+    is_cached = False
+    if args.ignore_cache:
+        interact('INFO: Ignoring cache')
+    else:
+        is_cached = cache.file_is_cached(args.infile)
+        interact(f"INFO: Input file {args.infile} is {'' if is_cached else 'not '}cached")
 
     # step 1.1
     if args.instcounts:
         infile = cache.get_name_of_instrumented_file(args.infile)
-        if is_cached:
+        if is_cached and not args.ignore_cache:
             interact('INFO: Using cached instrumented file')
         else:
             interact('Instrumenting source file')

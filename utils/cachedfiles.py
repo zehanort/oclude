@@ -16,6 +16,22 @@ class CachedFiles:
         if not os.path.exists(self.cachedir):
             os.mkdir(self.cachedir)
 
+    @property
+    def size(self):
+        cache_files = list(map(lambda f : os.path.join(self.cachedir, f), os.listdir(self.cachedir)))
+        return sum(os.path.getsize(f) for f in cache_files if os.path.isfile(f))
+
+    def clear(self):
+        for filename in os.listdir(self.cachedir):
+            file_path = os.path.join(self.cachedir, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print('Failed to delete %s. Reason: %s' % (file_path, e))
+
     def get_name_of_instrumented_file(self, filename):
         return os.path.join(self.cachedir, 'instr_' + os.path.basename(filename))
 
