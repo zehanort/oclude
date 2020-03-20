@@ -1,110 +1,107 @@
 import os
+import hashlib
+from shutil import copyfile
+import subprocess as sp
 
 from pycparserext.ext_c_parser import OpenCLCParser
 from pycparser.c_ast import FuncDef
 
-class CachedFiles(object):
+class CachedFiles:
 
-    def __init__(self, instrumented):
-        '''
-        different cache depending on whether instrumentation was requested
-        '''
-        basedir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.cache')
-        if not os.path.exists(basedir):
-            os.mkdir(basedir)
+    cachedir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.cache')
+    commentRemover = 'cpp'
 
-        if instrumented:
-            self.cachedfilesdir = os.path.join(basedir, 'instrumented')
+    def __init__(self):
+        # make sure that cache directory exists
+        if not os.path.exists(self.cachedir):
+            os.mkdir(self.cachedir)
+
+    def get_name_of_instrumented_file(self, filename):
+        return os.path.join(self.cachedir, 'instr_' + os.path.basename(filename))
+
+    def get_name_of_kernels_file(self, filename):
+        return os.path.join(self.cachedir, os.path.basename(filename) + '.kernels')
+
+    def get_name_of_digest_file(self, filename):
+        return os.path.join(self.cachedir, os.path.basename(filename) + '.digest')
+
+    def md5(self, filename):
+        '''
+        Returns the md5 hex digest of the provided file
+        '''
+        hash_md5 = hashlib.md5()
+        with open(filename, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b''):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+
+    def file_is_cached(self, filename):
+        '''
+        Checks whether the provided file has been cached in the past
+        '''
+        cached_file = self.get_name_of_instrumented_file(filename)
+        infile_digest = self.md5(filename)
+        cached_file_digest_file = self.get_name_of_digest_file(filename)
+        try:
+            with open(cached_file_digest_file, 'r') as f:
+                cached_file_digest = f.read().strip()
+            return cached_file_digest == infile_digest
+        except FileNotFoundError:
+            return False
+
+    def get_file_kernels(self, filename):
+        '''
+        Returns a list of the kernels present in the provided file
+        '''
+        kernels_file = self.get_name_of_kernels_file(filename)
+        cached_file = self.get_name_of_instrumented_file(filename)
+
+        # have we seen this file again?
+        # (we use file_is_cached to compare files with filecmp
+        #  to avoid same name issues)
+        if self.file_is_cached(filename) and os.path.exists(kernels_file):
+            with open(kernels_file, 'r') as f:
+                kernel_list = f.read().splitlines()
         else:
-            self.cachedfilesdir = os.path.join(basedir, 'simple')
+            # firstly, get the kernel list
 
-        self.kernelsdir = os.path.join(basedir, 'kernels')
-        if not os.path.exists(self.kernelsdir):
-            os.mkdir(self.kernelsdir)
+            # remove instrumentation comments
+            cmdout = sp.run(f'{self.commentRemover} {cached_file}', stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+            cmdout = cmdout.stdout.decode('ascii')
 
-        return
+            src = ''.join(filter(lambda line : line.strip() and not line.startswith('#'), cmdout.splitlines(keepends=True)))
 
-    def _get_name_for_kernel_cache(self, file):
-        '''
-        a template for the file that holds the kernel function names of the provided file
-        '''
-        return os.path.join(self.kernelsdir, 'kernels_' + os.path.basename(file))
+            parser = OpenCLCParser()
+            ast = parser.parse(src)
 
-    def get_file(self, file):
-        '''
-        a template that creates new file names for the cache
-        '''
-        return os.path.join(self.cachedfilesdir, 'oclude_cache_' + os.path.basename(file))
+            kernel_list = []
+            for f in filter(lambda x : isinstance(x, FuncDef), ast):
+                if any(x.endswith('kernel') for x in f.decl.funcspec):
+                    kernel_list.append(f.decl.name)
 
-    def exists(self):
-        '''
-        replies whether cached files directory/database exists
-        '''
-        return os.path.exists(self.cachedfilesdir)
-
-    def create(self):
-        '''
-        creates the cached files directory
-        a call to "exists" should have happen previously
-        '''
-        os.mkdir(self.cachedfilesdir)
-        return
-
-    def create_file(self, file):
-        '''
-        creates a new file in the cache and returns its name
-        '''
-        cached_file = self.get_file(file)
-
-        with open(file, 'r') as f:
-            input_file_data = f.read()
-
-        with open(cached_file, 'w') as out:
-            out.write(input_file_data)
-
-        return cached_file
-
-    def file_is_cached(self, file):
-        '''
-        replies whether a file already exists in the cache,
-        based on the name and last modification timestamps
-        '''
-        file_in_cache = self.get_file(file)
-        return os.path.exists(file_in_cache) and os.path.getmtime(file_in_cache) > os.path.getmtime(file)
-
-    def cache_file_kernels(self, file, kernels):
-        '''
-        caches a list of the kernel function names in the provided file
-        '''
-        kernel_cache = self._get_name_for_kernel_cache(file)
-        with open(kernel_cache, 'w') as f:
-            for kernel in kernels:
-                f.write(kernel + '\n')
-        return
-
-    def find_file_kernels(self, file):
-        '''
-        finds the kernel function names in the provided file
-        '''
-        parser = OpenCLCParser()
-        with open(file, 'r') as f:
-            ast = parser.parse(f.read())
-        kernel_list = []
-        for f in filter(lambda x : isinstance(x, FuncDef), ast):
-            if any(x.endswith('kernel') for x in f.decl.funcspec):
-                kernel_list.append(f.decl.name)
-        return kernel_list
-
-    def get_file_kernels(self, file):
-        '''
-        returns a list of the kernel function names in the provided file
-        '''
-        kernel_cache = self._get_name_for_kernel_cache(file)
-
-        if not os.path.exists(kernel_cache):
-            self.find_file_kernels(file)
-
-        with open(kernel_cache, 'r') as f:
-            kernel_list = f.read().splitlines()
+            # secondly, cache the kernel list
+            with open(kernels_file, 'w') as f:
+                for kernel in kernel_list:
+                    f.write(kernel + '\n')
 
         return kernel_list
+
+    def copy_file_to_cache(self, filename):
+        '''
+        Copies the input file `filename` to the cache, in order for
+        the instrumentation phase to edit it
+        '''
+        cached_file = self.get_name_of_instrumented_file(filename)
+        kernels_file = self.get_name_of_kernels_file(filename)
+        infile_digest_file = self.get_name_of_digest_file(filename)
+
+        copyfile(filename, cached_file)
+        infile_digest = self.md5(filename)
+        with open(infile_digest_file, 'w') as f:
+            f.write(infile_digest + '\n')
+
+        # remove previous kernel file
+        try:
+            os.remove(kernels_file)
+        except:
+            pass

@@ -2,9 +2,7 @@
 
 **/build/
 **/bin/
-**/.cache/**/*.cl
-**/.cache/**/*.ll
-**/.cache/**/*.bc
+**/.cache/
 
 **/*.pyc
 **/lextab.py

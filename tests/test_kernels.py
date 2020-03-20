@@ -6,28 +6,11 @@ testdir = os.path.dirname(os.path.abspath(__file__))
 SIZE = 1024
 WORK_GROUPS = 8
 
-# while cache is not functional, this function is needed...
-def purge_cache():
-        cache = os.path.join(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0], 'utils', '.cache')
-        cachedirs = map(lambda dir : os.path.join(cache, dir), ['instrumented', 'kernels', 'simple'])
-        for cachedir in cachedirs:
-            for filename in os.listdir(cachedir):
-                file_path = os.path.join(cachedir, filename)
-                try:
-                    if os.path.isfile(file_path) or os.path.islink(file_path):
-                        os.unlink(file_path)
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)
-                except Exception as e:
-                    print('Failed to delete %s. Reason: %s' % (file_path, e))
-
 ### this is the main tester for all kernel files ###
 def check(kernelfile, kernels):
 
-    # remove the following line when cache is functional
-    purge_cache()
-
     kernelfilepath = os.path.join(testdir, kernelfile)
+
     errors = []
     for kernel in kernels:
         command = f'oclude {kernelfilepath} -k {kernel} -s {SIZE} -w {WORK_GROUPS} -i'
@@ -38,9 +21,6 @@ def check(kernelfile, kernels):
             errors.append(f'ERROR OCCURED from {kernelfile}:{kernel}\nstderr:\n{error}\n')
         if len(output.splitlines()) == 1:
             errors.append(f'EMPTY OUTPUT from {kernelfile}:{kernel}\nstderr:\n{error}\n')
-
-    # remove the following line when cache is functional
-    purge_cache()
 
     assert not errors, f'errors occured: {"".join(errors)}'
 
