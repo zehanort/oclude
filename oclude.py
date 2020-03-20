@@ -98,41 +98,42 @@ def run():
         if input() != 'y':
             exit(0)
 
-    ### STEP 0: check our database for this file  ###
-    ### if the file exists, just run it           ###
-    ### if the file does not exist, instrument it ###
-    ### if the database does not exist, create it ###
+    ### STEP 1: cache checking (if needed) ###
+    ##########################################
+    #   1. was any of the flags below used?
+    #       instcounts: Is the instrumented version of the file cached?
+    #           YES: use it
+    #           NO: go on to instrumentation, remember to cache it when done
+    #       timeit: No need to do something
+    #   2. check if cache knows the file kernels (this whole step should be done transparently, inside cache class)
+    #       YES: get them and:
+    #           a. user specified a kernel: check if it exists in the file (could fail)
+    #           b. user did not specify a kernel: prompt them
+    #       NO: find them, and go to YES
 
-    cache = utils.CachedFiles(args.instcounts)
+    ##########################################
 
-    if cache.exists() and cache.file_is_cached(args.infile):
-        interact(f'INFO: Input file {args.infile} is cached; working with it')
-        infile = cache.get_file(args.infile)
+    cache = utils.CachedFiles()
 
-    else:
+    is_cached = cache.file_is_cached(args.infile)
+    interact(f"INFO: Input file {args.infile} is {'' if is_cached else 'not '}cached")
 
-        if not cache.exists():
-            interact('INFO: Cached files directory does not exist, creating it... ', nl=False)
-            cache.create()
-            interact('done', prompt=False)
-
-        else: # else cache exists but does not have the input file
-            interact(f'INFO: Input file {args.infile} is not cached; need to instrument and cache it')
-
-        infile = cache.create_file(args.infile)
-
-        ### STEP 1: instrument input source file ###
-        ###  the final code ends up in tempfile  ###
-        interact('Instrumenting source code')
-        if args.instcounts:
-            file_kernels = utils.instrument_file(infile, args.verbose)
+    # step 1.1
+    if args.instcounts:
+        infile = cache.get_name_of_instrumented_file(args.infile)
+        if is_cached:
+            interact('INFO: Using cached instrumented file')
         else:
-            file_kernels = cache.find_file_kernels(infile)
+            interact('Instrumenting source file')
+            cache.copy_file_to_cache(args.infile)
+            utils.instrument_file(infile, args.verbose)
+    else:
+        infile = args.infile
+        if not is_cached:
+            cache.copy_file_to_cache(infile)
 
-        cache.cache_file_kernels(infile, file_kernels)
-
-    # a last sanity check
-    file_kernels = cache.get_file_kernels(infile)
+    # step 1.2
+    file_kernels = cache.get_file_kernels(args.infile)
     if not args.kernel or args.kernel not in file_kernels:
         if args.kernel:
             interact(f"ERROR: No kernel function named '{args.kernel}' exists in file '{args.infile}'")
