@@ -1,8 +1,11 @@
+**/desk/
+
 **/build/
 **/bin/
 **/.cache/**/*.cl
 **/.cache/**/*.ll
 **/.cache/**/*.bc
+
 **/*.pyc
 **/lextab.py
 **/yacctab.py
