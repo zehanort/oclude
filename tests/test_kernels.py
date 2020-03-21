@@ -8,16 +8,17 @@ SIZE = 1024
 WORK_GROUPS = 8
 
 @pytest.yield_fixture(scope='session', autouse=True)
-def clear_cache_after_testing():
-    yield ### cleanup ###
+def ensure_consistent_cache_state():
+
     cachedir = os.path.join(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0], 'utils', '.cache')
-    for filename in os.listdir(cachedir):
+    files_before = os.listdir(cachedir)
+
+    yield # run test session #
+
+    for filename in filter(lambda f : f not in files_before, os.listdir(cachedir)):
         file_path = os.path.join(cachedir, filename)
         try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
+            os.unlink(file_path)
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 

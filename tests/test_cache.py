@@ -1,6 +1,7 @@
 import pytest
 import os, shutil
 import subprocess as sp
+from tempfile import gettempdir
 
 ### SOME GLOBALS ###
 testdir = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +28,37 @@ tmptestdir2 = os.path.join(testdir, 'tmptestdir2')
 
 kernel1 = os.path.join(tmptestdir1, 'same_name.cl')
 kernel2 = os.path.join(tmptestdir2, 'same_name.cl')
+
+@pytest.yield_fixture(scope='session', autouse=True)
+def ensure_consistent_cache_state():
+
+    tmpdir = gettempdir()
+    files_moved = []
+    for filename in os.listdir(cachedir):
+        file_path_from = os.path.join(cachedir, filename)
+        file_path_to = os.path.join(tmpdir, filename)
+        try:
+            shutil.move(file_path_from, file_path_to)
+        except Exception as e:
+            print('Failed to move %s to %s. Reason: %s' % (file_path_from, file_path_to, e))
+        files_moved.append((file_path_to, file_path_from))
+
+    yield # run test session #
+
+    # clear cache
+    for filename in os.listdir(cachedir):
+        file_path = os.path.join(cachedir, filename)
+        try:
+            os.unlink(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+    # restore previous cache files
+    for file_path_from, file_path_to in files_moved:
+        try:
+            shutil.move(file_path_from, file_path_to)
+        except Exception as e:
+            print('Failed to move %s to %s. Reason: %s' % (file_path_from, file_path_to, e))
 
 @pytest.yield_fixture(autouse=True)
 def handle_test_files():
