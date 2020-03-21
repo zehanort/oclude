@@ -1,6 +1,7 @@
 import os
 import subprocess as sp
 from sys import stderr
+from tempfile import gettempdir
 
 class Interactor(object):
 
@@ -47,7 +48,7 @@ llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
 
 bindir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin')
 
-templlvm = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.oclude_tmp_instr_ll.ll')
+templlvm = os.path.join(gettempdir(), '.oclude_tmp_instr_ll.ll')
 
 hidden_counter_name_local = 'ocludeHiddenCounterLocal'
 hidden_counter_name_global = 'ocludeHiddenCounterGlobal'
