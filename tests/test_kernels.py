@@ -38,6 +38,10 @@ def check(kernelfile, kernels):
         if len(output.splitlines()) == 1:
             errors.append(f'EMPTY OUTPUT from {kernelfile}:{kernel}\nstderr:\n{error}\n')
 
+    # skip empty output tests to differentiate them from other failures
+    if errors and all(e.startswith('EMPTY OUTPUT') for e in errors):
+        pytest.skip('empty output')
+
     assert not errors, f'errors occured: {"".join(errors)}'
 
 ### one test per kernel file ###
