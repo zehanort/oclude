@@ -46,6 +46,11 @@ def check(kernelfile, kernels):
 
 ### one test per kernel file ###
 
+def test_custom__simplevec():
+    kernelfile = 'custom/simplevec.cl'
+    kernels = ['vecadd']
+    check(kernel_file, kernels)
+
 def test_backprop__backprop_kernel():
     kernelfile = 'backprop/backprop_kernel.cl'
     kernels = ['bpnn_layerforward_ocl', 'bpnn_adjust_weights_ocl']
