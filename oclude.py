@@ -15,7 +15,6 @@ parser.add_argument('infile',
 parser.add_argument('-k', '--kernel',
     type=str,
     help='the name of the kernel to run from the input file'
-    # required=True
 )
 
 parser.add_argument('-s', '--size',
@@ -129,7 +128,6 @@ def run():
     #           a. user specified a kernel: check if it exists in the file (could fail)
     #           b. user did not specify a kernel: prompt them
     #       NO: find them, and go to YES
-
     ##########################################
 
     cache = utils.CachedFiles()

@@ -199,6 +199,3 @@ def instrument_file(file, verbose):
         interact('============================================================================', prompt=False)
 
     interact('Intrumentation completed successfully')
-
-    # needed by oclude for a last sanity check
-    return kernelFuncs
