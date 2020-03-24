@@ -1,6 +1,6 @@
 import pytest
 import os, shutil
-import subprocess as sp
+from testutils import run_command
 
 ### SOME GLOBALS ###
 testdir = os.path.dirname(os.path.abspath(__file__))
@@ -30,10 +30,8 @@ def check(kernelfile, kernels):
     errors = []
     for kernel in kernels:
         command = f'oclude {kernelfilepath} -k {kernel} -s {SIZE} -w {WORK_GROUPS} -i'
-        cmdout = sp.run(command, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-        output = cmdout.stdout.decode('ascii')
-        error = cmdout.stderr.decode('ascii')
-        if not output or cmdout.returncode != 0:
+        output, error, retcode = run_command(command)
+        if not output or retcode != 0:
             errors.append(f'ERROR OCCURED from {kernelfile}:{kernel}\nstderr:\n{error}\n')
         if len(output.splitlines()) == 1:
             errors.append(f'EMPTY OUTPUT from {kernelfile}:{kernel}\nstderr:\n{error}\n')

@@ -1,7 +1,7 @@
 import pytest
 import os, shutil
-import subprocess as sp
 from tempfile import gettempdir
+from testutils import run_command
 
 ### SOME GLOBALS ###
 testdir = os.path.dirname(os.path.abspath(__file__))
@@ -89,73 +89,63 @@ def test_kernel_files_same_name():
     errors = []
 
     # run first kernel
-    cmdout1 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    output1 = cmdout1.stdout.decode('ascii')
-    error1 = cmdout1.stderr.decode('ascii')
+    output1, error1, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
 
     # run second kernel
-    cmdout2 = sp.run(f"oclude {kernel2} -s {SIZE} -w {WORK_GROUPS} -k vmul", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    output2 = cmdout2.stdout.decode('ascii')
-    error2 = cmdout2.stderr.decode('ascii')
+    output2, error2, retcode2 = run_command(f"oclude {kernel2} -s {SIZE} -w {WORK_GROUPS} -k vmul")
 
-    assert cmdout1.returncode == 0
+    assert retcode1 == 0
     assert error1.splitlines()[0].strip().endswith('is not cached')
-    assert cmdout2.returncode == 0
+    assert retcode2 == 0
     assert error2.splitlines()[0].strip().endswith('is not cached')
 
 def test_same_kernel_file_twice():
 
     # run first kernel
-    cmdout1 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    error1 = cmdout1.stderr.decode('ascii')
+    _, error1, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
 
     # run first kernel again!
-    cmdout2 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    error2 = cmdout2.stderr.decode('ascii')
+    _, error2, retcode2 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
 
-    assert cmdout1.returncode == 0
+    assert retcode1 == 0
     assert error1.splitlines()[0].strip().endswith('is not cached')
-    assert cmdout2.returncode == 0
+    assert retcode2 == 0
     assert error2.splitlines()[0].strip().endswith('is cached')
 
 def test_clear_cache_flag():
 
     # dummy kernel to ensure caching
-    cmdout1 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+    _, _, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
 
     # dummy kernel again to see that now it is cached
-    cmdout2 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    error2 = cmdout2.stderr.decode('ascii')
+    _, error2, retcode2 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
 
     # dummy kernel again once more to see that it is not cached after clearing
-    cmdout3 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd --clear-cache", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    error3 = cmdout3.stderr.decode('ascii')
+    _, error3, retcode3 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd --clear-cache")
     [error3_first_line, error3_second_line] = error3.splitlines()[0:2]
 
-    assert cmdout1.returncode == 0
-    assert cmdout2.returncode == 0
+    assert retcode1 == 0
+    assert retcode2 == 0
     assert error2.splitlines()[0].strip().endswith('is cached')
-    assert cmdout3.returncode == 0
+    assert retcode3 == 0
     assert error3_first_line.strip().endswith('INFO: Clearing cache')
     assert error3_second_line.strip().endswith('is not cached')
 
 def test_ignore_cache_flag():
 
     # dummy kernel to ensure caching
-    cmdout1 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+    _, _, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
 
     # dummy kernel again to see that now it is cached
-    cmdout2 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    error2 = cmdout2.stderr.decode('ascii')
+    _, error2, retcode2 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
 
     # dummy kernel again once more to see that now we ignore cache
-    cmdout3 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd --ignore-cache", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    error3 = cmdout3.stderr.decode('ascii')
+    _, error3, retcode3 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd --ignore-cache")
 
-    assert cmdout1.returncode == 0
-    assert cmdout2.returncode == 0
+    assert retcode1 == 0
+    assert retcode2 == 0
     assert error2.splitlines()[0].strip().endswith('is cached')
-    assert cmdout3.returncode == 0
+    assert retcode3 == 0
     assert error3.splitlines()[0].strip().endswith('INFO: Ignoring cache')
 
 def test_no_cache_warnings():
@@ -166,16 +156,14 @@ def test_no_cache_warnings():
             f.write('A')
 
     # dummy kernel to produce cache warning
-    cmdout1 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    error1 = cmdout1.stderr.decode('ascii')
+    _, error1, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
 
     # dummy kernel to suppress cache warning
-    cmdout2 = sp.run(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd --no-cache-warnings", stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
-    error2 = cmdout2.stderr.decode('ascii')
+    _, error2, retcode2 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd --no-cache-warnings")
 
     os.remove(large_garbage)
 
-    assert cmdout1.returncode == 0
+    assert retcode1 == 0
     assert 'WARNING: Cache size exceeds' in error1.splitlines()[0]
-    assert cmdout2.returncode == 0
+    assert retcode2 == 0
     assert 'WARNING: Cache size exceeds' not in error2.splitlines()[0]

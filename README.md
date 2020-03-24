@@ -33,6 +33,16 @@ Further documentation will be added when the project reaches its BETA version.
 $ oclude tests/dwt2d/com_dwt.cl -k c_CopySrcToComponents -s 1024 -w 8
 [oclude] INFO: Input file tests/dwt2d/com_dwt.cl is cached
 [oclude] Running kernel c_CopySrcToComponents from file tests/dwt2d/com_dwt.cl
+[hostcode-wrapper] Using platform: Intel(R) OpenCL HD Graphics
+[hostcode-wrapper] Using device: Intel(R) Gen9 HD Graphics NEO (device OpenCL version: OpenCL 2.1 NEO )
+[hostcode-wrapper] Kernel name: c_CopySrcToComponents
+[hostcode-wrapper] Kernel arg 0: d_r (int*, global)
+[hostcode-wrapper] Kernel arg 1: d_g (int*, global)
+[hostcode-wrapper] Kernel arg 2: d_b (int*, global)
+[hostcode-wrapper] Kernel arg 3: cl_d_src (uchar*, global)
+[hostcode-wrapper] Kernel arg 4: pixels (int, private)
+[hostcode-wrapper] Enqueuing kernel with Global NDRange = 1024 and Local NDRange = 128
+[oclude] Kernel run completed successfully
 ```
 
 Nothing interesting happened though... That is why `oclude` has 2 modes of operation:
@@ -45,9 +55,19 @@ Simply use the flag `--time-it` or `-t` to measure the execution time of the spe
 $ oclude tests/dwt2d/com_dwt.cl -k c_CopySrcToComponents -s 1024 -w 8 -t
 [oclude] INFO: Input file tests/dwt2d/com_dwt.cl is cached
 [oclude] Running kernel c_CopySrcToComponents from file tests/dwt2d/com_dwt.cl
+[hostcode-wrapper] Using platform: Intel(R) OpenCL HD Graphics
+[hostcode-wrapper] Using device: Intel(R) Gen9 HD Graphics NEO (device OpenCL version: OpenCL 2.1 NEO )
+[hostcode-wrapper] Kernel name: c_CopySrcToComponents
+[hostcode-wrapper] Kernel arg 0: d_r (int*, global)
+[hostcode-wrapper] Kernel arg 1: d_g (int*, global)
+[hostcode-wrapper] Kernel arg 2: d_b (int*, global)
+[hostcode-wrapper] Kernel arg 3: cl_d_src (uchar*, global)
+[hostcode-wrapper] Kernel arg 4: pixels (int, private)
+[hostcode-wrapper] Enqueuing kernel with Global NDRange = 1024 and Local NDRange = 128
+[oclude] Kernel run completed successfully
 Execution time for kernel 'c_CopySrcToComponents':
-ns: 8166.0
-ms: 0.008166
+ns: 8083.0
+ms: 0.008083
 ```
 
 ### Mode 2: Intstruction count
@@ -59,6 +79,16 @@ $ oclude tests/dwt2d/com_dwt.cl -k c_CopySrcToComponents -s 1024 -w 8 -i
 [oclude] INFO: Input file tests/dwt2d/com_dwt.cl is cached
 [oclude] INFO: Using cached instrumented file
 [oclude] Running kernel c_CopySrcToComponents from file tests/dwt2d/com_dwt.cl
+[hostcode-wrapper] Using platform: Intel(R) OpenCL HD Graphics
+[hostcode-wrapper] Using device: Intel(R) Gen9 HD Graphics NEO (device OpenCL version: OpenCL 2.1 NEO )
+[hostcode-wrapper] Kernel name: c_CopySrcToComponents
+[hostcode-wrapper] Kernel arg 0: d_r (int*, global)
+[hostcode-wrapper] Kernel arg 1: d_g (int*, global)
+[hostcode-wrapper] Kernel arg 2: d_b (int*, global)
+[hostcode-wrapper] Kernel arg 3: cl_d_src (uchar*, global)
+[hostcode-wrapper] Kernel arg 4: pixels (int, private)
+[hostcode-wrapper] Enqueuing kernel with Global NDRange = 1024 and Local NDRange = 128
+[oclude] Kernel run completed successfully
 Instructions executed for kernel 'c_CopySrcToComponents':
             6144 - add
             6144 - getelementptr
