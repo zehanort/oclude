@@ -120,7 +120,7 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
 
     # sort instrumentation order as appeared in source file text and some mumbo-jumbo restructuring
     # mainly to get rid of defaultdicts; final structure is explained in the comments below
-    instr_data_dicts = list(map(lambda x : list(x), instr_data_dicts.items()))
+    instr_data_dicts = list(map(list, instr_data_dicts.items()))
     instr_data_list = [(x, *list(map(lambda defdict : list(defdict.items()), y))) for x, y in instr_data_dicts]
     instr_data_list = [(x, sorted(y, key=lambda k : k[0])) for x, y in instr_data_list]
     # at this point, instr_data_list holds instrumentation information in the following form:
