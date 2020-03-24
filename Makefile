@@ -6,7 +6,6 @@ INC=utils/inc
 
 CXX=g++
 CXXFLAGS=-std=c++17 -O3 -Wall -Wno-ignored-attributes -Werror -I./$(INC)
-LDFLAGS=-lOpenCL
 
 CXXFLAGS_UTILS=-std=c++17 -O3 -Wall `llvm-config --cxxflags` -I./$(INC)
 LDFLAGS_UTILS=`llvm-config --ldflags --system-libs --libs all`
