@@ -190,51 +190,43 @@ def run():
         interact(f"Continuing with kernel '{args.kernel}'")
 
     ### STEP 2: run the kernel ###
-    hostcodeWrapper = os.path.join(utils.bindir, 'hostcode-wrapper')
-    hostcodeWrapperFlags = [
-        infile,
-        args.kernel,
-        str(args.size),
-        str(args.work_groups),
-        'y' if args.instcounts else 'n',
-        'y' if args.timeit else 'n',
-        str(args.platform),
-        str(args.device)
-    ]
-
-    cmdout, cmderr = interact.run_command(f'Running kernel {args.kernel} from file {args.infile}', hostcodeWrapper, *hostcodeWrapperFlags)
-
-    interact(cmderr, prompt=False, nl=False)
+    interact(f'Running kernel {args.kernel} from file {args.infile}')
+    results = utils.run_kernel(
+        infile, args.kernel,
+        args.size, args.work_groups,
+        args.instcounts, args.timeit,
+        args.platform, args.device,
+        args.verbose
+    )
     interact('Kernel run completed successfully')
 
-    ### STEP 3: parse hostcode-wrapper output ###
-    cmdout = cmdout.splitlines()
-
-    if args.timeit:
-        nsecs = float(cmdout[-1].split(':')[1])
-        cmdout = cmdout[:-1]
-
-    if args.instcounts:
-        instcounts = sorted(
-            [
-                (utils.llvm_instructions[instIdx], instCnt)
-                for instIdx, instCnt in map(
-                    lambda x : map(int, x),
-                    map(lambda x : x.split(':'), cmdout)
-                )
-                if instCnt != 0
-            ],
-            key=lambda x : x[1],
-            reverse=True
-        )
-
-    ### STEP 4: dump an oclgrind-like output (if requested by user) ###
+    ### STEP 3: dump an oclgrind-like output (if requested by user) ###
     if args.instcounts:
         print(f"Instructions executed for kernel '{args.kernel}':")
-        for instName, instCnt in instcounts:
-            print(f'{instCnt : 16} - {instName}')
+        for instname, instcount in results['instcounts'].items():
+            if instcount != 0:
+                print(f'{instcount : 16} - {instname}')
 
     if args.timeit:
-        print(f"Execution time for kernel '{args.kernel}':")
-        print('ns:', nsecs)
-        print('ms:', nsecs / 1000000.0)
+        # kernel profiling first...
+        kernel_results_lines = []
+        kernel_results = results['timeit']['kernel']
+        indent = max(len(timing_scope) for timing_scope in kernel_results.keys())
+        print(f"Time measurement info regarding the execution time for kernel '{args.kernel}' (in milliseconds):")
+        for timing_scope, time_elapsed in kernel_results.items():
+            kernel_results_lines.append(f'{timing_scope:{indent}} - {time_elapsed}')
+
+        # ...then general profiling info
+        general_results_lines = []
+        general_results = results['timeit']['general']
+        indent = max(len(profiling_category) for profiling_category in general_results.keys())
+        for profiling_category, time_info in general_results.items():
+            general_results_lines.append(f'{profiling_category:{indent}} - {time_info}')
+
+        barrier = '=' * max(len(line) for line in kernel_results_lines + general_results_lines)
+
+        for line in kernel_results_lines:
+            print(line)
+        print(barrier)
+        for line in general_results_lines:
+            print(line)

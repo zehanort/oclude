@@ -1,7 +1,5 @@
 from .cfg import *
-
 from .cachedfiles import *
-
 from .utils import (
 	Interactor,
 	bindir,
@@ -11,3 +9,4 @@ from .utils import (
 	llvm_instructions
 )
 from .instrumentor import instrument_file
+from .hostcode import run_kernel
