@@ -25,7 +25,7 @@ class Interactor(object):
     def run_command(self, text, utility, *rest):
         command = ' '.join([utility, *rest]) if rest else utility
         self(text + (f': {command}' if self.verbose else ''))
-        cmdout = sp.run(command, stdout=sp.PIPE, stderr=sp.PIPE, shell=True)
+        cmdout = sp.run(command.split(), stdout=sp.PIPE, stderr=sp.PIPE)
         if (cmdout.returncode != 0):
             self(f'Error while running {utility}. STDERR of command follows:')
             self(cmdout.stderr.decode("ascii"), prompt=False)
