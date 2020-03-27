@@ -10,5 +10,6 @@ setup(
     url =              'https://github.com/zehanort/oclude',
 
     install_requires = ['pycparserext==2020.1', 'pyopencl', 'rvg'],
+    python_requires =  '>=3.6',
     entry_points =     { 'console_scripts': ['oclude=oclude:run'] }
 )

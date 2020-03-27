@@ -45,9 +45,14 @@ def check(kernelfile, kernels):
 
 ### one test per kernel file ###
 
-def test_custom__simplevec():
+def test_toy__simplevec():
     kernelfile = 'toy_kernels/simplevec.cl'
     kernels = ['vecadd']
+    check(kernelfile, kernels)
+
+def test_toy__structs():
+    kernelfile = 'toy_kernels/structs.cl'
+    kernels = ['stest']
     check(kernelfile, kernels)
 
 def test_backprop__backprop_kernel():

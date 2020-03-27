@@ -24,7 +24,8 @@ class Interactor(object):
 
     def run_command(self, text, utility, *rest):
         command = ' '.join([utility, *rest]) if rest else utility
-        self(text + (f': {command}' if self.verbose else ''))
+        if text is not None:
+            self(text + (f': {command}' if self.verbose else ''))
         cmdout = sp.run(command.split(), stdout=sp.PIPE, stderr=sp.PIPE)
         if (cmdout.returncode != 0):
             self(f'Error while running {utility}. STDERR of command follows:')
@@ -45,6 +46,8 @@ llvm_instructions = ['add', 'sub', 'mul', 'udiv', 'sdiv', 'urem', 'srem',
                      'fptoui', 'fptosi', 'uitofp', 'sitofp', 'ptrtoint', 'inttoptr', 'bitcast', 'addrspacecast',
                      'icmp', 'fcmp', 'phi', 'select', 'freeze', 'call', 'va_arg',
                      'landingpad', 'catchpad', 'cleanuppad']
+
+preprocessor = 'cpp'
 
 bindir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin')
 

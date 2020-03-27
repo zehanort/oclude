@@ -1,19 +1,41 @@
 import pyopencl as cl
 import pyopencl.cltypes as cltypes
+from pyopencl.tools import get_or_register_dtype, match_dtype_to_c_struct
 import pyopencl.characterize.performance as clperf
+from pycparserext.ext_c_parser import OpenCLCParser
+from pycparser.c_ast import Decl, Struct, Typedef, FuncDef, TypeDecl, ArrayDecl
+
+import utils
 from rvg import NumPyRVG
 import numpy as np
-
-from utils import (
-    Interactor,
-    hidden_counter_name_local,
-    hidden_counter_name_global,
-    llvm_instructions
-)
 import os
 from time import time
 
-oclude_buffer_length = len(llvm_instructions)
+oclude_buffer_length = len(utils.llvm_instructions)
+
+def create_struct_type(device, struct_name, struct):
+    field_decls = struct.decls
+    struct_fields = []
+    # iterate over struct fields
+    for field_decl in field_decls:
+        field_name = field_decl.name
+        # field is a scalar
+        if isinstance(field_decl.type, TypeDecl):
+            type_name = ' '.join(field_decl.type.type.names)
+            field_type = type_name if type_name != 'bool' else 'char'
+            struct_fields.append((field_name, eval(f'cltypes.{field_type}')))
+        # field is an array (with defined size TODO: OR IDENTIFIER!!!)
+        elif isinstance(field_decl.type, ArrayDecl):
+            raise NotImplementedError('arrays as struct fields are not supported yet')
+            struct_fields.append((field_name, create_array_type(field_name, field_decl)))
+        else:
+            raise NotImplementedError(f'field `{field_name}` of struct `{struct_name}` has a type that can not be understood')
+
+    # register struct
+    struct_dtype = np.dtype(struct_fields)
+    struct_dtype, _ = match_dtype_to_c_struct(device, struct_name, struct_dtype)
+    struct_dtype = get_or_register_dtype(struct_name, struct_dtype)
+    return struct_dtype
 
 def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit, platform_id, device_id, verbose):
     '''
@@ -22,7 +44,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
     but it is the heart of oclude
     '''
 
-    interact = Interactor(__file__.split(os.sep)[-1])
+    interact = utils.Interactor(__file__.split(os.sep)[-1])
     interact.set_verbosity(verbose)
 
     ### step 1: get OpenCL platform, device and context, ###
@@ -53,7 +75,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
 
     for idx in range(nargs):
         kernel_arg_name = kernel.get_arg_info(idx, cl.kernel_arg_info.NAME)
-        is_oclude_hidden_buffer = kernel_arg_name in [hidden_counter_name_local, hidden_counter_name_global]
+        is_oclude_hidden_buffer = kernel_arg_name in [utils.hidden_counter_name_local, utils.hidden_counter_name_global]
         if not is_oclude_hidden_buffer:
             interact(f'Kernel arg {idx + 1}: ', nl=False)
         kernel_arg_type_name = kernel.get_arg_info(idx, cl.kernel_arg_info.TYPE_NAME)
@@ -65,20 +87,59 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
         args.append((kernel_arg_name, kernel_arg_type_name, kernel_arg_address_qualifier))
 
     ### step 3: collect arg types ###
-    # TODO: structs
-    arg_types = []
+    arg_types = {}
+    parser = None
+    ast = None
+    typedefs = {}
+    structs = {}
 
-    for _, kernel_arg_type_name, _ in args:
+    for kernel_arg_name, kernel_arg_type_name, _ in args:
+
         argtype_base = kernel_arg_type_name.split('*')[0]
+
         try:
             # it is a normal OpenCL type
-            arg_types.append(eval('cltypes.' + argtype_base))
+            arg_types[kernel_arg_name] = eval('cltypes.' + argtype_base)
+
         except AttributeError:
-            # TODO: it is a struct
-            arg_types.append(None)
+            # it is a struct (lazy evaluation of structs)
+            if parser is None:
+                parser = OpenCLCParser()
+                cmdout, _ = interact.run_command(None, utils.utils.preprocessor, kernel_file_path)
+                kernel_source = '\n'.join(filter(lambda line : line.strip() and not line.startswith('#'), cmdout.splitlines()))
+                ast = parser.parse(kernel_source)
+
+                for ext in ast.ext:
+
+                    ### typedefs ###
+                    if isinstance(ext, Typedef):
+                        if isinstance(ext.type.type, Struct):
+                            # typedefed struct (new)
+                            if ext.type.type.decls is not None:
+                                typedefs[ext.name] = create_struct_type(device, ext.name, ext.type.type)
+                            # typedefed struct (already seen it)
+                            else:
+                                previous_name = 'struct ' + ext.type.type.name
+                                new_name = ext.name
+                                typedefs[new_name] = structs[previous_name]
+                        # simple typedef (not a struct)
+                        else:
+                            previous_name = ' '.join(ext.type.type.names)
+                            new_name = ext.name
+                            typedefs[new_name] = ext.type
+
+                    ### struct declarations ###
+                    elif isinstance(ext, Decl) and isinstance(ext.type, Struct):
+                        name = 'struct ' + ext.type.name
+                        structs[name] = create_struct_type(device, ext.type.name, ext.type)
+
+            try:
+                arg_types[kernel_arg_name] = structs[argtype_base]
+            except KeyError:
+                arg_types[kernel_arg_name] = typedefs[argtype_base]
 
     ### step 4: create argument buffers ###
-    rand = NumPyRVG(GSIZE)
+    rand = NumPyRVG(limit=GSIZE)
     arg_hostbufs = []
     arg_bufs = []
     # will be needed to set scalar args
@@ -87,14 +148,14 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
     hidden_global_hostbuf = None
     hidden_global_buf = None
 
-    for (argname, argtypename, argaddrqual), argtype in zip(args, arg_types):
+    for (argname, argtypename, argaddrqual), argtype in zip(args, arg_types.values()):
 
         # special handling of oclude hidden buffers
-        if argname == hidden_counter_name_local:
+        if argname == utils.hidden_counter_name_local:
             which_are_scalar.append(None)
             arg_bufs.append(cl.LocalMemory(oclude_buffer_length * argtype(0).itemsize))
             continue
-        if argname == hidden_counter_name_global:
+        if argname == utils.hidden_counter_name_global:
             which_are_scalar.append(None)
             hidden_global_hostbuf = np.zeros(oclude_buffer_length * WGROUPS, dtype=argtype)
             arg_hostbufs.append(hidden_global_hostbuf)
@@ -111,7 +172,6 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
             val = rand(argtype)
             arg_hostbufs.append(val)
             arg_bufs.append(val if not arg_is_local else cl.LocalMemory(val.itemsize))
-            print('ARG IS SCALAR', argtypename, 'ARGTYPE', argtype, 'HOSTBUF', val)
         # argument is buffer
         else:
             which_are_scalar.append(None)
@@ -120,7 +180,6 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
             arg_bufs.append(
                 cl.Buffer(context, mem_flags, hostbuf=val) if not arg_is_local else cl.LocalMemory(len(val) * val.dtype.itemsize)
             )
-            print('ARG IS NOT SCALAR', argtypename, 'ARGTYPE', argtype, 'HOSTBUF', val)
 
     ### step 5: set kernel arguments and run it!
     kernel.set_scalar_arg_dtypes(which_are_scalar)
@@ -159,7 +218,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
                 final_counter[i] += global_counter[i + j * oclude_buffer_length]
 
         results['instcounts'] = {
-            k: v for k, v in sorted(dict(zip(llvm_instructions, final_counter)).items(), key=lambda item: item[1], reverse=True)
+            k: v for k, v in sorted(dict(zip(utils.llvm_instructions, final_counter)).items(), key=lambda item: item[1], reverse=True)
         }
 
     if timeit:

@@ -8,5 +8,5 @@ from .utils import (
 	add_instrumentation_data_to_file,
 	llvm_instructions
 )
-from .instrumentor import instrument_file
+from .instrumentor import instrument_file, preprocessor
 from .hostcode import run_kernel
