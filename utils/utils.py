@@ -2,6 +2,12 @@ import os
 import subprocess as sp
 from sys import stderr
 from tempfile import gettempdir
+from pycparserext.ext_c_generator import OpenCLCGenerator
+from pycparser.c_ast import (
+    Compound, Decl, PtrDecl, TypeDecl, IdentifierType, ID,
+    If, BinaryOp, FuncCall, ExprList, Constant, For,
+    DeclList, UnaryOp, Assignment, ArrayRef
+)
 
 class Interactor(object):
 
@@ -70,6 +76,247 @@ if (get_local_id(0) == 0) {{
 }}
 '''
 
+hiddenCounterLocalArgument = Decl(
+    name=hidden_counter_name_local,
+    quals=['__local'],
+    storage=[],
+    funcspec=[],
+    type=PtrDecl(
+        quals=[],
+        type=TypeDecl(
+            declname=hidden_counter_name_local,
+            quals=['__local'],
+            type=IdentifierType(names=['uint'])
+        )
+    ),
+    init=None,
+    bitsize=None
+)
+
+hiddenCounterGlobalArgument = Decl(
+    name=hidden_counter_name_global,
+    quals=['__global'],
+    storage=[],
+    funcspec=[],
+    type=PtrDecl(
+        quals=[],
+        type=TypeDecl(
+            declname=hidden_counter_name_global,
+            quals=['__global'],
+            type=IdentifierType(names=['uint'])
+        )
+    ),
+    init=None,
+    bitsize=None
+)
+
+# this is the prologue of the instrumentation of every kernel in OpenCL:
+#
+# if (get_local_id(0) == 0)
+#     for (int i = 0; i < <len(llvm_instructions)>; i++)
+#         <hidden_counter_name_local>[i] = 0;
+# barrier(CLK_GLOBAL_MEM_FENCE);
+#
+# and this is its AST:
+
+prologue = [
+    If(cond=BinaryOp(op='==',
+                     left=FuncCall(name=ID(name='get_local_id'),
+                                   args=ExprList(exprs=[Constant(type='int', value='0')])),
+                     right=Constant(type='int', value='0')),
+       iftrue=For(init=DeclList(decls=[Decl(name='i', quals=[], storage=[], funcspec=[],
+                                type=TypeDecl(declname='i', quals=[], type=IdentifierType(names=['int'])),
+                                init=Constant(type='int', value='0'), bitsize=None)]),
+                  cond=BinaryOp(op='<', left=ID(name='i'), right=Constant(type='int', value=str(len(llvm_instructions)))),
+                  next=UnaryOp(op='p++', expr=ID(name='i')),
+                  stmt=Assignment(op='=', lvalue=ArrayRef(name=ID(name=hidden_counter_name_local), subscript=ID(name='i')),
+                                          rvalue=Constant(type='int', value='0'))),
+       iffalse=None),
+    FuncCall(name=ID(name='barrier'), args=ExprList(exprs=[ID(name='CLK_GLOBAL_MEM_FENCE')]))
+]
+
+# this is the epilogue of the instrumentation of every kernel in OpenCL:
+#
+# barrier(CLK_GLOBAL_MEM_FENCE);
+# if (get_local_id(0) == 0) {{
+#     int glid = get_group_id(0) * <len(llvm_instructions)>;
+#     for (int i = glid; i < glid + <len(llvm_instructions)>; i++)
+#         <hidden_counter_name_global>[i] = <hidden_counter_name_local>[i - glid];
+#
+# and this is its AST:
+
+epilogue = [
+    FuncCall(name=ID(name='barrier'), args=ExprList(exprs=[ID(name='CLK_GLOBAL_MEM_FENCE')])),
+    If(cond=BinaryOp(op='==',
+                     left=FuncCall(name=ID(name='get_local_id'),
+                                   args=ExprList(exprs=[Constant(type='int', value='0')])),
+                     right=Constant(type='int', value='0')),
+       iftrue=Compound(block_items=[
+                            Decl(name='glid', quals=[], storage=[], funcspec=[],
+                                 type=TypeDecl(declname='glid', quals=[], type=IdentifierType(names=['int'])),
+                                 init=BinaryOp(op='*', left=FuncCall(name=ID(name='get_group_id'),
+                                               args=ExprList(exprs=[Constant(type='int', value='0')])),
+                                               right=Constant(type='int', value=str(len(llvm_instructions)))),
+                                 bitsize=None),
+                            For(init=DeclList(decls=[Decl(name='i', quals=[], storage=[], funcspec=[],
+                                              type=TypeDecl(declname='i', quals=[], type=IdentifierType(names=['int'])),
+                                              init=ID(name='glid'), bitsize=None)]),
+                                cond=BinaryOp(op='<', left=ID(name='i'),
+                                              right=BinaryOp(op='+', left=ID(name='glid'),
+                                                             right=Constant(type='int', value=str(len(llvm_instructions))))),
+                                next=UnaryOp(op='p++', expr=ID(name='i')),
+                                stmt=Assignment(op='=', lvalue=ArrayRef(name=ID(name=hidden_counter_name_global), subscript=ID(name='i')),
+                                                rvalue=ArrayRef(name=ID(name=hidden_counter_name_local),
+                                                subscript=BinaryOp(op='-', left=ID(name='i'), right=ID(name='glid')))))]),
+       iffalse=None)
+]
+
+class OcludeFormatter(OpenCLCGenerator):
+    '''
+    2 additions regarding OpenCLCGenerator:
+        1. add missing curly braces around if/else/for/do while/while
+        2. add hidden oclude buffers
+    '''
+
+    def __init__(self, funcCallsToEdit, kernelFuncs):
+        super().__init__()
+        self.funcCallsToEdit = funcCallsToEdit
+        self.kernelFuncs = kernelFuncs
+
+    def _add_braces_around_stmt(self, n):
+        if not isinstance(n.stmt, Compound):
+            return Compound(block_items=[n.stmt])
+        return n.stmt
+
+    def visit_If(self, n):
+        if n.iftrue is not None and not isinstance(n.iftrue, Compound):
+            n.iftrue = Compound(block_items=[n.iftrue])
+        if n.iffalse is not None and not isinstance(n.iffalse, Compound):
+            n.iffalse = Compound(block_items=[n.iffalse])
+        return super().visit_If(n)
+
+    def visit_For(self, n):
+        n.stmt = self._add_braces_around_stmt(n)
+        return super().visit_For(n)
+
+    def visit_While(self, n):
+        n.stmt = self._add_braces_around_stmt(n)
+        return super().visit_While(n)
+
+    def visit_DoWhile(self, n):
+        n.stmt = self._add_braces_around_stmt(n)
+        return super().visit_DoWhile(n)
+
+    def visit_FuncDef(self, n):
+        '''
+        Overrides visit_FuncDef to add hidden oclude buffers
+        '''
+        n.decl.type.args.params.append(hiddenCounterLocalArgument)
+        if n.decl.name in self.kernelFuncs:
+            n.decl.type.args.params.append(hiddenCounterGlobalArgument)
+        return super().visit_FuncDef(n)
+
+    def visit_FuncCall(self, n):
+        '''
+        Overrides visit_FuncCall to add hidden oclude buffers
+        '''
+        if n.name.name in self.funcCallsToEdit:
+            x = n.args.exprs.append(ID(hidden_counter_name_local))
+        return super().visit_FuncCall(n)
+
+class OcludeInstrumentor(OpenCLCGenerator):
+    '''
+    Responsible to:
+        1. add prologue and epilogue to all kernels
+        2. add instrumentation code
+    !!! WARNING !!! It is implicitly taken as granted that all possible curly braces
+    have been added to the source code before attempting to instrument it.
+    If not, using this class leads to undefined behavior.
+    '''
+    def __init__(self, kernelFuncs, instrumentation_data):
+        super().__init__()
+        self.kernelFuncs = kernelFuncs
+        self.instrumentation_data = instrumentation_data
+        self.function_instrumentation_data = None
+
+    def _create_instrumentation_cmds(self, idx):
+        '''
+        idx points to an entry of self.function_instrumentation_data, which is
+        a list of tuples (instr_idx, instr_cnt), and creates the AST representation of the command
+        "atomic_add(&<hidden_local_counter>[instr_idx], instr_cnt);" for each tuple.
+        Returns the list of these representations
+        '''
+        instr = []
+        for instr_idx, instr_cnt in self.function_instrumentation_data[idx]:
+            instr.append(
+                FuncCall(name=ID(name='atomic_add'),
+                         args=ExprList(exprs=[
+                                           UnaryOp(op='&', expr=ArrayRef(name=ID(name=hidden_counter_name_local),
+                                                   subscript=Constant(type='int', value=instr_idx))),
+                                           Constant(type='int', value=instr_cnt)
+                                       ]
+                              )
+                )
+            )
+        return instr
+
+    def _process_bb(self, bb, idx):
+
+        instrumented_bb = []
+
+        for block_item in bb + [None]:
+            # case 1: reached the end of bb
+            if block_item is None or isinstance(block_item, Return):
+                instrumented_bb += self._create_instrumentation_cmds(idx)
+                idx += 1
+                if block_item is not None:
+                    instrumented_bb.append(block_item)
+                break
+            # case 2: right before a compound; need to add instrumentation cmds
+            #         several subcases need to be taken into consideration
+            elif isinstance(block_item, Compound):
+                instrumented_bb += self._create_instrumentation_cmds(idx)
+                idx += 1
+                idx, internal_instrumented_bb = self._process_bb(block_item, idx)
+                instrumented_bb += internal_instrumented_bb
+                instrumented_bb.append(block_item)
+            elif isinstance(block_item, If):
+                instrumented_bb += self._create_instrumentation_cmds(idx)
+                idx += 1
+                idx, instrumented_iftrue = self._process_bb(block_item.iftrue, idx)
+                block_item.iftrue = instrumented_iftrue
+                idx, instrumented_iffalse = self._process_bb(block_item.iffalse, idx)
+                block_item.iffalse = instrumented_iffalse
+                instrumented_bb.append(block_item)
+            elif isinstance(block_item, For) or isinstance(block_item, While) or isinstance(block_item, DoWhile):
+                instrumented_bb += self._create_instrumentation_cmds(idx)
+                idx += 1
+                idx, block_item.stmt = self._process_bb(block_item.stmt, idx)
+                instrumented_bb.append(block_item)
+            # case 3: right before a simple body item; nothing to do
+            else:
+                instrumented_bb.append(block_item)
+
+        return idx, instrumented_bb
+
+    def visit_FuncDef(self, n):
+        '''
+        Overrides visit_FuncDef to add instrumentation
+        '''
+        self.function_instrumentation_data = self.instrumentation_data[n.decl.name]
+        ### step 1: add instrumentation instructions ###
+        _, n.body.block_items = self._process_bb(n.body.block_items, 0)
+        if n.name.name in self.kernelFuncs:
+            ### step 2: add prologue ###
+            n.body.block_items = self.prologue + n.body.block_items
+            ### step 3: add epilogue ###
+            if isinstance(n.body.block_items[-1], Return):
+                n.body.block_items = n.body.block_items[:-1] + self.epilogue + n.body.block_items[-1:]
+            else:
+                n.body.block_items += self.epilogue
+
+        return super().visit_FuncDef(n)
+
 def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
     '''
     returns a dictionary "line (int): code to add (string)"
@@ -78,13 +325,13 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
     from collections import defaultdict
 
     def write_incr(key, val):
-        return f'atomic_add(&{hidden_counter_name_local}[{key}], {val}); /* {llvm_instructions[key]} */'
+        return f'atomic_add(&{hidden_counter_name_local}[{key}], {val});'
 
     def write_decr_ret(val):
         '''
         needed to balance out the "call"s that were removed due to inlined functions
         '''
-        return f'atomic_sub(&{hidden_counter_name_local}[{llvm_instructions.index("ret")}], {val}); /* -ret */'
+        return f'atomic_sub(&{hidden_counter_name_local}[{llvm_instructions.index("ret")}], {val});'
 
     # parse instrumentation data and create an instrumentation dict for each function
     instr_data_lines = sorted(instr_data_raw.splitlines(), key=lambda x : int(x.split('|')[0].split(':')[1]))
@@ -132,12 +379,12 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
     # each tuple holds the information (line to enter code -i.e. first line of the BB-, code -a string-)
 
     # uncomment the following segment to see it for yourself:
-    # for (fn, fl), instrd in instr_data_list:
-    #     print('function', fn, 'line', fl)
-    #     for instrl, instrc in instrd:
-    #         print(f'\tinsert following code at line {instrl}: {instrc}')
-    #         print()
-    # exit(0)
+    for (fn, fl), instrd in instr_data_list:
+        print('function', fn, 'line', fl)
+        for instrl, instrc in instrd:
+            print(f'\tinsert following code at line {instrl}: {instrc}')
+            print()
+    exit(0)
 
     # now modify the file in place with the instr_data dicts
     # each instr_data (1 per function) is a dict <line:instrumentation_data>
@@ -151,7 +398,7 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
         # firstly, add code at the start of kernels to initialize local counter buffer to 0
         if function_name in kernels and not added_prologue[function_name]:
             filedata.insert(function_line + offset, prologue)
-            offset += 1
+            offset += len(prologue.splitlines())
             added_prologue[function_name] = True
         for lineno, instr_string in instr_data:
             # must add instrumentation data between the previous line and this one
@@ -162,7 +409,7 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw):
         # lastly, add code at the end of kernels to copy local buffer to the respective space in the global one
         if function_name in kernels:
             filedata.insert(insertion_line, epilogue)
-            offset += 1
+            offset += len(epilogue.splitlines())
 
     # done; write the instrumented source back to file
     with open(filename, 'w') as f:

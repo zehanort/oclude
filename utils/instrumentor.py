@@ -1,6 +1,5 @@
 import os
 import utils
-import types
 
 from pycparserext.ext_c_parser import OpenCLCParser
 from pycparserext.ext_c_generator import OpenCLCGenerator
@@ -8,61 +7,13 @@ from pycparser.c_ast import Decl, PtrDecl, TypeDecl, IdentifierType, ID, FuncDef
 
 interact = utils.Interactor(__file__.split(os.sep)[-1])
 
-### 0 pass tools (preprocessor) ###
+### 1st pass tools (preprocessor) ###
 preprocessor = 'cpp'
 
-### 1st pass tools ###
-missingCurlyBracesAdder = 'clang-tidy'
-missingCurlyBracesAdderFlags = ['-fix',
-                                '-checks="readability-braces-around-statements"',
-                                '--',
-                                '-include', utils.cfg.clcHeaderFile,
-                                '-isystem', utils.cfg.libclcIncludePath,
-                                '-cl-std=CL2.0']
-
 ### 2nd pass tools ###
-braceBreaker = 'clang-format'
-braceBreakerFlags = ['-style=file']
-
-### 3rd pass tools (python native) ###
-hiddenCounterLocalArgument = Decl(
-    name=utils.hidden_counter_name_local,
-    quals=['__local'],
-    storage=[],
-    funcspec=[],
-    type=PtrDecl(
-        quals=[],
-        type=TypeDecl(
-            declname=utils.hidden_counter_name_local,
-            quals=['__local'],
-            type=IdentifierType(names=['uint'])
-        )
-    ),
-    init=None,
-    bitsize=None
-)
-
-hiddenCounterGlobalArgument = Decl(
-    name=utils.hidden_counter_name_global,
-    quals=['__global'],
-    storage=[],
-    funcspec=[],
-    type=PtrDecl(
-        quals=[],
-        type=TypeDecl(
-            declname=utils.hidden_counter_name_global,
-            quals=['__global'],
-            type=IdentifierType(names=['uint'])
-        )
-    ),
-    init=None,
-    bitsize=None
-)
-
-### 4th pass tools ###
 instrumentationGetter = os.path.join(utils.bindir, 'instrumentation-parser')
 
-### 5th pass tools ###
+### 3rd pass tools ###
 cl2llCompiler = 'clang'
 cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm', '-S', '-cl-std=CL2.0', '-Xclang',
                       '-finclude-default-header', '-fno-discard-value-names']
@@ -82,14 +33,9 @@ def instrument_file(file, verbose):
     with open(file, 'w') as f:
         f.writelines(filter(lambda line : line.strip() and not line.startswith('#'), cmdout.splitlines(keepends=True)))
 
-    ####################################
-    # step 2: add missing curly braces #
-    ####################################
-    interact.run_command('Adding missing curly braces', missingCurlyBracesAdder, file, *missingCurlyBracesAdderFlags)
-
-    ##################################################
-    # step 3: add hidden counter argument in kernels #
-    ##################################################
+    ############################################################################
+    # step 2: add hidden counter arguments in kernels and missing curly braces #
+    ############################################################################
     parser = OpenCLCParser()
 
     with open(file, 'r') as f:
@@ -101,41 +47,22 @@ def instrument_file(file, verbose):
     for f in ASTfunctions:
         (funcCallsToEdit, kernelFuncs)[any(x.endswith('kernel') for x in f.decl.funcspec)].append(f.decl.name)
 
-    for func in ASTfunctions:
-        func.decl.type.args.params.append(hiddenCounterLocalArgument)
-        if func.decl.name in kernelFuncs:
-            func.decl.type.args.params.append(hiddenCounterGlobalArgument)
-
     # there may be (helper) functions with the attribute "inline"
     # we need to avoid them, but to remember them in order to restore them later
-    inlinedLines = []
+    inlinedFuncs = []
     for func in ASTfunctions:
         if 'inline' in func.decl.funcspec:
-            inlinedLines.append(func.coord.line)
             func.decl.funcspec = [x for x in func.decl.funcspec if x != 'inline']
+            inlinedFuncs.append(func.decl.name)
 
-    gen = OpenCLCGenerator()
-    old_visit_FuncCall = gen.visit_FuncCall
-
-    def new_visit_FuncCall(self, n):
-        if n.name.name in funcCallsToEdit:
-            x = n.args.exprs.append(ID(utils.hidden_counter_name_local))
-        return old_visit_FuncCall(n)
-
-    gen.visit_FuncCall = types.MethodType(new_visit_FuncCall, gen)
+    # our generator adds hidden arguments and missing curly braces
+    gen = utils.OcludeFormatter(funcCallsToEdit, kernelFuncs)
 
     with open(file, 'w') as f:
         f.write(gen.visit(ast))
 
-    #################################################
-    # step 4: add new line before every curly brace #
-    #################################################
-    cmdout, _ = interact.run_command('Breaking curly braces', braceBreaker, *braceBreakerFlags, file)
-    with open(file, 'w') as f:
-        f.writelines(filter(lambda line : line.strip(), cmdout.splitlines(keepends=True)))
-
     #########################################################################
-    # step 5: instrument source code with counter incrementing where needed #
+    # step 3: instrument source code with counter incrementing where needed #
     #########################################################################
 
     # first take the instrumentation data from the respective tool
@@ -150,19 +77,16 @@ def instrument_file(file, verbose):
         'Retrieving instrumentation data from LLVM bitcode', instrumentationGetter, utils.templlvm
     )
 
-    # there may be a need to restore the "inline" function attribute in some functions at this point
-    if inlinedLines:
-
+    ### there may be a need to restore the "inline" function attribute in some functions at this point ###
+    if inlinedFuncs:
         with open(file, 'r') as f:
-            src = f.read().splitlines(keepends=True)
-
-        # restore "inline" function attribute wherever it was emitted
-        for line in inlinedLines:
-            src[line - 1] = 'inline ' + src[line - 1]
-
+            ast = parser.parse(f.read())
+        for ext in filter(lambda x : isinstance(x, FuncDef) and x.decl.name in inlinedFuncs, ast.ext):
+            func.decl.funcspec = ['inline'] + func.decl.funcspec
+        gen = OpenCLCGenerator()
         with open(file, 'w') as f:
-            f.writelines(src)
-    # "inline" function attribute restored at this point, if it was needed to
+            f.write(gen.visit(ast))
+    ### "inline" function attribute restored at this point, if it was needed to ###
 
     _, inliner_report = interact.run_command(
         'Compiling source to LLVM bitcode (2/2)', cl2llCompiler, *cl2llCompilerFlags, '-Rpass=inline', '-o', utils.templlvm, file
@@ -181,9 +105,29 @@ def instrument_file(file, verbose):
     # instrumentation is done! Congrats!
 
     # store a prettified (i.e. easier to read/inspect) format in the cache
-    cmdout, _ = interact.run_command('Prettifing instrumented source code', braceBreaker, *braceBreakerFlags, file)
+
+
+
+    # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    # with open(file, 'r') as f:
+    #     lines = f.read().splitlines()
+    #     for i, line in enumerate(lines):
+    #         print(i, ':', line)
+    #         if i > 200: break
+    # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+
+
+
+    gen = OpenCLCGenerator()
+    with open(file, 'r') as f:
+        ast = parser.parse(f.read())
+    src = gen.visit(ast)
     with open(file, 'w') as f:
-        f.write(cmdout)
+        for line in src.splitlines():
+            if f'atomic_add(&{utils.hidden_counter_name_local}' in line:
+                instr_idx = int(line.split(utils.hidden_counter_name_local + ', ')[1].split(')')[0])
+                line += f' \\* {utils.llvm_instructions[instr_idx]} *\\'
+            f.write(line)
 
     if verbose:
 

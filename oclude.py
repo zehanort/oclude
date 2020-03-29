@@ -89,12 +89,6 @@ def run():
     interact.set_verbosity(args.verbose)
 
     # some sanity checks
-    if not os.path.exists(utils.cfg.clcHeaderFile) or not os.path.exists(utils.cfg.libclcIncludePath):
-        interact('ERROR: paths to libclc header file and/or include directory are invalid.')
-        interact('Have you set them correctly before running oclude?')
-        interact('If not, they are located in the file ' + os.path.abspath(os.path.join('utils', 'cfg', '__init__.py')))
-        exit(1)
-
     if not os.path.exists(args.infile):
         interact(f'ERROR: Input file {args.infile} does not exist.')
         exit(1)
