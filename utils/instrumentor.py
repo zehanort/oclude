@@ -15,7 +15,7 @@ instrumentationGetter = os.path.join(utils.bindir, 'instrumentation-parser')
 
 ### 3rd pass tools ###
 cl2llCompiler = 'clang'
-cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm', '-S', '-cl-std=CL2.0', '-Xclang',
+cl2llCompilerFlags = ['-g', '-O0', '-c', '-x', 'cl', '-emit-llvm', '-S', '-cl-std=CL2.0', '-Xclang',
                       '-finclude-default-header', '-fno-discard-value-names']
 
 def instrument_file(file, verbose):
@@ -97,37 +97,22 @@ def instrument_file(file, verbose):
     # that means that each inlined function leads to 1 less "call" and 1 less "ret"
     inline_lines = [x.split()[0].split(':')[-3] for x in filter(lambda y : 'remark' in y, inliner_report.splitlines())]
     for inline_line in inline_lines:
-        instrumentation_data = instrumentation_data.replace(inline_line + ':call', inline_line + ':retNOT', 1)
+        instrumentation_data = instrumentation_data.replace(inline_line + ':call', 'retNOT', 1)
 
     # now add them to the source file, eventually instrumenting it
-    utils.add_instrumentation_data_to_file(file, kernelFuncs, instrumentation_data)
+    utils.add_instrumentation_data_to_file(file, kernelFuncs, instrumentation_data, parser)
 
     # instrumentation is done! Congrats!
 
     # store a prettified (i.e. easier to read/inspect) format in the cache
-
-
-
-    # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-    # with open(file, 'r') as f:
-    #     lines = f.read().splitlines()
-    #     for i, line in enumerate(lines):
-    #         print(i, ':', line)
-    #         if i > 200: break
-    # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-
-
-
-    gen = OpenCLCGenerator()
     with open(file, 'r') as f:
-        ast = parser.parse(f.read())
-    src = gen.visit(ast)
+        src = f.read()
     with open(file, 'w') as f:
         for line in src.splitlines():
-            if f'atomic_add(&{utils.hidden_counter_name_local}' in line:
-                instr_idx = int(line.split(utils.hidden_counter_name_local + ', ')[1].split(')')[0])
-                line += f' \\* {utils.llvm_instructions[instr_idx]} *\\'
-            f.write(line)
+            if f'atomic_add(& {utils.hidden_counter_name_local}' in line or f'atomic_sub(& {utils.hidden_counter_name_local}' in line:
+                instr_idx = int(line.split('[')[1].split(']')[0])
+                line += f' /* {utils.llvm_instructions[instr_idx]} */'
+            f.write(line + '\n')
 
     if verbose:
 
