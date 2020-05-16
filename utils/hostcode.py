@@ -5,13 +5,19 @@ import pyopencl.characterize.performance as clperf
 from pycparserext.ext_c_parser import OpenCLCParser
 from pycparser.c_ast import Decl, Struct, Typedef, FuncDef, TypeDecl, ArrayDecl
 
-import utils
+from .interactor import Interactor
+from .constants import (
+    llvm_instructions,
+    hidden_counter_name_local,
+    hidden_counter_name_global
+)
+
 from rvg import NumPyRVG
 import numpy as np
 import os
 from time import time
 
-oclude_buffer_length = len(utils.llvm_instructions)
+oclude_buffer_length = len(llvm_instructions)
 
 def create_struct_type(device, struct_name, struct):
     field_decls = struct.decls
@@ -44,7 +50,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
     but it is the heart of oclude
     '''
 
-    interact = utils.Interactor(__file__.split(os.sep)[-1])
+    interact = Interactor(__file__.split(os.sep)[-1])
     interact.set_verbosity(verbose)
 
     ### step 1: get OpenCL platform, device and context, ###
@@ -75,7 +81,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
 
     for idx in range(nargs):
         kernel_arg_name = kernel.get_arg_info(idx, cl.kernel_arg_info.NAME)
-        is_oclude_hidden_buffer = kernel_arg_name in [utils.hidden_counter_name_local, utils.hidden_counter_name_global]
+        is_oclude_hidden_buffer = kernel_arg_name in [hidden_counter_name_local, hidden_counter_name_global]
         if not is_oclude_hidden_buffer:
             interact(f'Kernel arg {idx + 1}: ', nl=False)
         kernel_arg_type_name = kernel.get_arg_info(idx, cl.kernel_arg_info.TYPE_NAME)
@@ -105,7 +111,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
             # it is a struct (lazy evaluation of structs)
             if parser is None:
                 parser = OpenCLCParser()
-                cmdout, _ = interact.run_command(None, utils.utils.preprocessor, kernel_file_path)
+                cmdout, _ = interact.run_command(None, preprocessor, kernel_file_path)
                 kernel_source = '\n'.join(filter(lambda line : line.strip() and not line.startswith('#'), cmdout.splitlines()))
                 ast = parser.parse(kernel_source)
 
@@ -151,11 +157,11 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
     for (argname, argtypename, argaddrqual), argtype in zip(args, arg_types.values()):
 
         # special handling of oclude hidden buffers
-        if argname == utils.hidden_counter_name_local:
+        if argname == hidden_counter_name_local:
             which_are_scalar.append(None)
             arg_bufs.append(cl.LocalMemory(oclude_buffer_length * argtype(0).itemsize))
             continue
-        if argname == utils.hidden_counter_name_global:
+        if argname == hidden_counter_name_global:
             which_are_scalar.append(None)
             hidden_global_hostbuf = np.zeros(oclude_buffer_length * WGROUPS, dtype=argtype)
             arg_hostbufs.append(hidden_global_hostbuf)
@@ -218,7 +224,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
                 final_counter[i] += global_counter[i + j * oclude_buffer_length]
 
         results['instcounts'] = {
-            k: v for k, v in sorted(dict(zip(utils.llvm_instructions, final_counter)).items(), key=lambda item: item[1], reverse=True)
+            k: v for k, v in sorted(dict(zip(llvm_instructions, final_counter)).items(), key=lambda item: item[1], reverse=True)
         }
 
     if timeit:
