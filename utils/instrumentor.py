@@ -1,4 +1,5 @@
 from pycparserext.ext_c_generator import OpenCLCGenerator
+from pycparserext.ext_c_parser import OpenCLCParser
 from pycparser.c_ast import *
 from .constants import (
     llvm_instructions,
@@ -8,20 +9,261 @@ from .constants import (
 
 class OcludeInstrumentor(OpenCLCGenerator):
     '''
-    Responsible to:
-        1. add prologue and epilogue to all kernels
-        2. add instrumentation code
+    Responsible to add instrumentation code
     !!! WARNING !!! It is implicitly taken as granted that all possible curly braces
     have been added to the source code before attempting to instrument it.
     If not, using this class leads to undefined behavior.
     '''
-    def __init__(self, kernelFuncs, instrumentation_data):
-
+    def __init__(self, instrumentation_data):
         super().__init__()
-
-        self.kernelFuncs = kernelFuncs
         self.instrumentation_data = instrumentation_data
         self.function_instrumentation_data = None
+        self.oclude_bool_var_idx = 1
+
+    def _get_bb_instrumentation(self, idx):
+        '''
+        idx points to an entry of self.function_instrumentation_data, which is
+        a list of tuples (instr_idx, instr_cnt), and creates the AST representation of the command
+        "atomic_{add,sub}(&<hidden_local_counter>[instr_idx], instr_cnt);" for each tuple.
+        Returns the list of these representations (i.e. AST nodes)
+        '''
+        instr = []
+        for instr_name, instr_cnt in self.function_instrumentation_data[idx]:
+
+            if instr_name.startswith('retNOT'):
+                atomic_func_name = 'atomic_sub'
+                instr_index = str(llvm_instructions.index('ret'))
+            else:
+                atomic_func_name = 'atomic_add'
+                instr_index = str(llvm_instructions.index(instr_name))
+
+            instr.append(
+                FuncCall(name=ID(atomic_func_name),
+                         args=ExprList(exprs=[
+                                           UnaryOp(op='&', expr=ArrayRef(name=ID(hidden_counter_name_local),
+                                                   subscript=Constant(type='int', value=instr_index))),
+                                           Constant(type='int', value=str(instr_cnt))
+                                       ]
+                              )
+                )
+            )
+
+        return instr
+
+    def _unroll_cond_level(self, cond):
+        '''
+        recursive function that turns a conditional of a single operator
+        into (one or more) if-else-if-... block(s)
+        returns a tuple with 2 fields:
+        - an ID node of the boolean variable that holds the result
+        - the respective block(s) as a list
+        '''
+
+        def create_new_bool_var():
+            name = 'oclude_bool_var_' + str(self.oclude_bool_var_idx)
+            self.oclude_bool_var_idx += 1
+            return name, Decl(name=name,
+                              quals=[], storage=[], funcspec=[],
+                              type=TypeDecl(declname=name,
+                                         quals=[],
+                                         type=IdentifierType(names=['bool'])
+                                        ),
+                              init=None, bitsize=None
+                             )
+
+        def assign(var, val):
+            '''
+            assigns the boolean value val to the variable named var
+            UNDEFINED BEHAVIOR if val is not an ID or a string ('true' / 'false')
+            '''
+            return Assignment(
+                op='=',
+                lvalue=ID(var),
+                rvalue=ID(val) if type(val) is str else val
+            )
+
+        if not (isinstance(cond, BinaryOp) and cond.op in ['||', '&&']):
+            return cond, None
+
+        var_name, var_decl = create_new_bool_var()
+        op = cond.op
+        curr_cond = cond
+        operands = []
+        while isinstance(curr_cond, BinaryOp) and curr_cond.op == op:
+            operands.append(curr_cond.right)
+            curr_cond = curr_cond.left
+
+        operands.append(curr_cond)
+        operands.reverse()
+
+        operand, operand_block = self._unroll_cond_level(operands.pop())
+        blocks_to_append = [assign(var_name, operand)]
+        if operand_block is not None:
+            blocks_to_append = operand_block + blocks_to_append
+
+        while operands:
+            operand, operand_block = self._unroll_cond_level(operands.pop())
+
+            if operand_block is not None:
+                blocks_to_append = operand_block + blocks_to_append
+
+            if op == '||':
+                # if operand is true, then our conditional is true
+                # else, we move on to the next operand (if any)
+                operand_expr  = operand
+                iftrue_block  = assign(var_name, 'true') # conditional is true
+                iffalse_block = Compound(block_items=blocks_to_append)
+
+            else: # op == '&&'
+                # if op is false, then our conditional is false
+                # else, we move on to the next operand (if any)
+                operand_expr  = UnaryOp(op='!', expr=operand)
+                iftrue_block  = assign(var_name, 'false') # conditional is false
+                iffalse_block = Compound(block_items=blocks_to_append)
+
+            blocks_to_append = [If(
+                cond    = operand_expr,
+                iftrue  = iftrue_block,
+                iffalse = iffalse_block
+            )]
+
+        return ID(var_name), [var_decl] + blocks_to_append
+
+    def visit_FuncDef(self, n):
+        '''
+        sets the instrumentation data of this specific function
+        for the visit_Compound function to find them later
+        '''
+        self.function_instrumentation_data = self.instrumentation_data[n.decl.name]
+        print('FUNCTION "' + n.decl.name + '" SHOULD HAVE', len(self.function_instrumentation_data), 'BBs')
+        return super().visit_FuncDef(n)
+
+    def visit_Compound(self, n):
+
+        # TODO: remove the following 3 lines
+        from random import randint
+        compound_id = ''.join([str(randint(1, 9)) for _ in range(6)])
+        print('[+++] ENTERING Compound with ID =', compound_id)
+
+        instr_block_items = []
+
+        for i in range(len(n.block_items)):
+            stmt = n.block_items[i]
+
+            # (maybe) bool var init
+            if isinstance(stmt, Decl) and stmt.init is not None:
+                cond_var, cond_block_list = self._unroll_cond_level(stmt.init)
+                if cond_block_list is not None:
+                    stmt.init = cond_var
+                    instr_block_items += cond_block_list
+
+            # (maybe) bool var assignment
+            elif isinstance(stmt, Assignment):
+                cond_var, cond_block_list = self._unroll_cond_level(stmt.rvalue)
+                if cond_block_list is not None:
+                    stmt.rvalue = cond_var
+                    instr_block_items += cond_block_list
+
+            # if statement
+            elif isinstance(stmt, If):
+                cond_var, cond_block_list = self._unroll_cond_level(stmt.cond)
+                if cond_block_list is not None:
+                    stmt.cond = cond_var
+                    instr_block_items += cond_block_list
+
+            # for statement
+            elif isinstance(stmt, For):
+                cond_var, cond_block_list = self._unroll_cond_level(stmt.cond)
+                # conditional BB
+                if cond_block_list is not None:
+                    stmt.cond = cond_var
+                    instr_block_items += cond_block_list
+                    # body BB
+                    # repeat conditional BB inside for loop, at the end
+                    # remove the declaration of the oclude bool var here
+                    # (it is already declared before the for loop)
+                    # (also remember that, per the LLVM layout, there is an inc BB
+                    #  at the end of the for loop body)
+                    for_body = [stmt.stmt] + cond_block_list[1:]
+                    # done, replace body of for with the instrumented one
+                    stmt.stmt = Compound(for_body)
+
+            # while statement
+            elif isinstance(stmt, While):
+                cond_var, cond_block_list = self._unroll_cond_level(stmt.cond)
+                # conditional BB
+                if cond_block_list is not None:
+                    stmt.cond = cond_var
+                    instr_block_items += cond_block_list
+                    # body BB
+                    # repeat conditional BB inside while loop, at the end
+                    # remove the declaration of the oclude bool var here
+                    # (it is already declared before the while loop)
+                    while_body = [stmt.stmt] + cond_block_list[1:]
+                    # done, replace body of while with the instrumented one
+                    stmt.stmt = Compound(while_body)
+
+            # do-while statement
+            elif isinstance(stmt, DoWhile):
+                cond_var, cond_block_list = self._unroll_cond_level(stmt.cond)
+                # before body BB, declare bool var if needed
+                if cond_block_list is not None:
+                    stmt.cond = cond_var
+                    instr_block_items.append(cond_block_list[0])
+                    # body BB
+                    # repeat conditional BB inside while loop, at the end
+                    # remove the declaration of the oclude bool var here
+                    # (it is already declared before the while loop)
+                    while_body = [stmt.stmt] + cond_block_list[1:]
+                    # done, replace body of while with the instrumented one
+                    stmt.stmt = Compound(while_body)
+
+            # ternary assignment
+            elif isinstance(stmt, Assignment) and isinstance(stmt.rvalue, TernaryOp):
+                lval = stmt.lvalue
+                ternary = stmt.rvalue
+                ternary_cond = ternary.cond
+                cond_var, cond_block_list = self._unroll_cond_level(ternary_cond)
+                ternary_iftrue = ternary.iftrue
+                ternary_iffalse = ternary.iffalse
+                stmt = If(
+                    cond = cond_var,
+                    iftrue = Compound([Assignment(op='=', lvalue=lval, rvalue=ternary_iftrue)]),
+                    iffalse = Compound([Assignment(op='=', lvalue=lval, rvalue=ternary_iffalse)])
+                )
+                if cond_block_list is not None:
+                    instr_block_items += cond_block_list
+
+            # ternary statement
+            elif isinstance(stmt, TernaryOp):
+                cond_var, cond_block_list = self._unroll_cond_level(stmt.cond)
+                iftrue = stmt.iftrue
+                iffalse = stmt.iffalse
+                stmt = If(
+                    cond = cond_var,
+                    iftrue = Compound([iftrue]),
+                    iffalse = Compound([iffalse])
+                )
+                if cond_block_list is not None:
+                    instr_block_items += cond_block_list
+
+            instr_block_items.append(stmt)
+
+        n.block_items = instr_block_items
+
+        # TODO: remove the following 1 line
+        print('[---] LEAVING Compound with ID =', compound_id)
+
+        return super().visit_Compound(n)
+
+
+class OcludeKernelFinalizer(OpenCLCGenerator):
+    '''
+    Responsible to add prologue and epilogue to all kernels
+    '''
+    def __init__(self, kernelFuncs):
+        super().__init__()
+        self.kernelFuncs = kernelFuncs
 
         # this is the prologue of the instrumentation of every kernel in OpenCL:
         #
@@ -83,143 +325,16 @@ class OcludeInstrumentor(OpenCLCGenerator):
                iffalse=None)
         ]
 
-    def _create_instrumentation_cmds(self, idx):
-        '''
-        idx points to an entry of self.function_instrumentation_data, which is
-        a list of tuples (instr_idx, instr_cnt), and creates the AST representation of the command
-        "atomic_{add,sub}(&<hidden_local_counter>[instr_idx], instr_cnt);" for each tuple.
-        Returns the list of these representations
-        '''
-        instr = []
-        for instr_name, instr_cnt in self.function_instrumentation_data[idx]:
-
-            if instr_name.startswith('retNOT'):
-                atomic_func_name = 'atomic_sub'
-                instr_index = str(llvm_instructions.index('ret'))
-            else:
-                atomic_func_name = 'atomic_add'
-                instr_index = str(llvm_instructions.index(instr_name))
-
-            instr.append(
-                FuncCall(name=ID(name=atomic_func_name),
-                         args=ExprList(exprs=[
-                                           UnaryOp(op='&', expr=ArrayRef(name=ID(name=hidden_counter_name_local),
-                                                   subscript=Constant(type='int', value=instr_index))),
-                                           Constant(type='int', value=str(instr_cnt))
-                                       ]
-                              )
-                )
-            )
-
-        return instr
-
-    def _count_logical_binops(self, bo):
-        if not isinstance(bo, BinaryOp):
-            return 1
-        if isinstance(bo, BinaryOp):
-            if not (bo.op == '||' or bo.op == '&&'):
-                return 1
-            else:
-                l = self._count_logical_binops(bo.left)
-                r = self._count_logical_binops(bo.right)
-                return l + r
-
-    def _process_bb(self, bb, idx, finish=True):
-
-        if bb is None:
-            return idx, bb
-
-        instrumented_bb = []
-
-        block_items = bb.block_items + [None] if bb.block_items is not None else [None]
-        for block_item in block_items:
-            # case 1: reached the end of bb, should have at least a ret or a br
-            if block_item is None or isinstance(block_item, Return):
-                if finish:
-                    print('\tIN END')
-                    instrumented_bb += self._create_instrumentation_cmds(idx)
-                    print('\t\tHELLO')
-                    idx += 1
-                    if block_item is not None:
-                        instrumented_bb.append(block_item)
-                break
-            # case 2: right before a compound; need to add instrumentation cmds
-            #         several subcases need to be taken into consideration
-            elif isinstance(block_item, If):
-                print('\tIN IF')
-                how_many_bin_ops = self._count_logical_binops(block_item.cond)
-                for _ in range(how_many_bin_ops):
-                    instrumented_bb += self._create_instrumentation_cmds(idx)
-                    idx += 1
-                idx, instrumented_iftrue = self._process_bb(block_item.iftrue, idx)
-                block_item.iftrue = instrumented_iftrue
-                # if-else-if is a special case
-                finish = not (block_item.iffalse is not None and len(block_item.iffalse.block_items) == 1
-                              and isinstance(block_item.iffalse.block_items[0], If))
-                idx, instrumented_iffalse = self._process_bb(block_item.iffalse, idx, finish)
-                block_item.iffalse = instrumented_iffalse
-                instrumented_bb.append(block_item)
-                # even if there is no else, a BB is created, take care of it
-                if block_item.iffalse is None:
-                    instrumented_bb += self._create_instrumentation_cmds(idx)
-                    idx += 1
-            elif isinstance(block_item, Assignment) and isinstance(block_item.rvalue, TernaryOp):
-                print('\tIN TERNARY')
-                # " ...some of you may die, but this is a risk I am willing to take... "
-                how_many_bin_ops = self._count_logical_binops(block_item.rvalue.cond)
-                for _ in range(how_many_bin_ops):
-                    instrumented_bb += self._create_instrumentation_cmds(idx)
-                    idx += 1
-                instrumented_bb += self._create_instrumentation_cmds(idx)
-                idx += 1
-                instrumented_bb += self._create_instrumentation_cmds(idx)
-                idx += 1
-                instrumented_bb.append(block_item)
-            elif isinstance(block_item, For) or isinstance(block_item, While) or isinstance(block_item, DoWhile):
-                print('\tIN FOR/WHILE/DOWHILE')
-                # before if/while/dowhile
-                instrumented_bb += self._create_instrumentation_cmds(idx)
-                idx += 1
-                # cond
-                how_many_bin_ops = self._count_logical_binops(block_item.cond)
-                for _ in range(how_many_bin_ops):
-                    instrumented_bb += self._create_instrumentation_cmds(idx)
-                    idx += 1
-                print('\tOPS COUNTED:', how_many_bin_ops)
-                # body
-                instrumented_bb += self._create_instrumentation_cmds(idx)
-                idx += 1
-                idx, block_item.stmt = self._process_bb(block_item.stmt, idx)
-                if isinstance(block_item, For):
-                    # i++
-                    block_item.stmt.block_items += self._create_instrumentation_cmds(idx)
-                    idx += 1
-                instrumented_bb.append(block_item)
-            # case 3: right before a simple body item; nothing to do
-            else:
-                print('\tIN ORDINARY (DO NOTHING)')
-                instrumented_bb.append(block_item)
-
-        return idx, Compound(block_items=instrumented_bb)
-
     def visit_FuncDef(self, n):
         '''
-        Overrides visit_FuncDef to add instrumentation
+        Overrides visit_FuncDef to add prologue and epilogue
         '''
-        self.function_instrumentation_data = self.instrumentation_data[n.decl.name]
-        print('FUNCTION:', n.decl.name, 'SHOULD BE:', len(self.function_instrumentation_data))
-        ### step 1: add instrumentation instructions ###
-        bbs, n.body = self._process_bb(n.body, 0)
         if n.decl.name in self.kernelFuncs:
-            ### step 2: add prologue ###
             n.body.block_items = self.prologue + n.body.block_items
-            ### step 3: add epilogue ###
             if isinstance(n.body.block_items[-1], Return):
                 n.body.block_items = n.body.block_items[:-1] + self.epilogue + n.body.block_items[-1:]
             else:
                 n.body.block_items += self.epilogue
-        print('FUNCTION:', n.decl.name, 'COUNTED:', bbs)
-        assert len(self.function_instrumentation_data) == bbs
 
         return super().visit_FuncDef(n)
 
@@ -246,6 +361,11 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw, parser):
     with open(filename, 'r') as f:
         ast = parser.parse(f.read())
 
-    instrumentor = OcludeInstrumentor(kernels, instrumentation_per_function)
+    # add instrumentation data to all functions
+    instrumentor = OcludeInstrumentor(instrumentation_per_function)
+    ast = OpenCLCParser().parse(instrumentor.visit(ast))
+
+    # add prologue and epilogue to kernel functions only
+    kernel_finalizer = OcludeKernelFinalizer(kernels)
     with open(filename, 'w') as f:
-        f.write(instrumentor.visit(ast))
+        f.write(kernel_finalizer.visit(ast))

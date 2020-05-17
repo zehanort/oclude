@@ -1,6 +1,7 @@
+from .constants import hidden_counter_name_local, hidden_counter_name_global
+
 from pycparserext.ext_c_generator import OpenCLCGenerator
 from pycparser.c_ast import *
-from .constants import hidden_counter_name_local, hidden_counter_name_global
 
 class OcludeFormatter(OpenCLCGenerator):
     '''
@@ -49,28 +50,26 @@ class OcludeFormatter(OpenCLCGenerator):
             bitsize=None
         )
 
-    def _add_braces_around_stmt(self, n):
-        if not isinstance(n.stmt, Compound):
-            return Compound(block_items=[n.stmt])
-        return n.stmt
+    def _add_missing_braces(self, stmt):
+        if stmt is not None and not isinstance(stmt, Compound):
+            return Compound(block_items=[stmt])
+        return stmt
 
     def visit_If(self, n):
-        if n.iftrue is not None and not isinstance(n.iftrue, Compound):
-            n.iftrue = Compound(block_items=[n.iftrue])
-        if n.iffalse is not None and not isinstance(n.iffalse, Compound):
-            n.iffalse = Compound(block_items=[n.iffalse])
+        n.iftrue = self._add_missing_braces(n.iftrue)
+        n.iffalse = self._add_missing_braces(n.iffalse)
         return super().visit_If(n)
 
     def visit_For(self, n):
-        n.stmt = self._add_braces_around_stmt(n)
+        n.stmt = self._add_missing_braces(n.stmt)
         return super().visit_For(n)
 
     def visit_While(self, n):
-        n.stmt = self._add_braces_around_stmt(n)
+        n.stmt = self._add_missing_braces(n.stmt)
         return super().visit_While(n)
 
     def visit_DoWhile(self, n):
-        n.stmt = self._add_braces_around_stmt(n)
+        n.stmt = self._add_missing_braces(n.stmt)
         return super().visit_DoWhile(n)
 
     def visit_FuncDef(self, n):
@@ -87,5 +86,5 @@ class OcludeFormatter(OpenCLCGenerator):
         Overrides visit_FuncCall to add hidden oclude buffers
         '''
         if n.name.name in self.funcCallsToEdit:
-            x = n.args.exprs.append(ID(hidden_counter_name_local))
+            n.args.exprs.append(ID(hidden_counter_name_local))
         return super().visit_FuncCall(n)

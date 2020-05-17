@@ -2,8 +2,6 @@ import pyopencl as cl
 import pyopencl.cltypes as cltypes
 from pyopencl.tools import get_or_register_dtype, match_dtype_to_c_struct
 import pyopencl.characterize.performance as clperf
-from pycparserext.ext_c_parser import OpenCLCParser
-from pycparser.c_ast import Decl, Struct, Typedef, FuncDef, TypeDecl, ArrayDecl
 
 from .interactor import Interactor
 from .constants import (
@@ -11,6 +9,9 @@ from .constants import (
     hidden_counter_name_local,
     hidden_counter_name_global
 )
+
+from pycparserext.ext_c_parser import OpenCLCParser
+from pycparser.c_ast import Decl, Struct, Typedef, FuncDef, TypeDecl, ArrayDecl
 
 from rvg import NumPyRVG
 import numpy as np
