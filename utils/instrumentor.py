@@ -272,9 +272,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
                     instr_block_items += self._get_bb_instrumentation(idx)
                     idx += 1
                 instr_block_items.append(block_item)
-                # the last BB
-                instr_block_items += self._get_bb_instrumentation(idx)
-                idx += 1
 
             ### (maybe) bool var assignment ###
             elif isinstance(block_item, Assignment):
@@ -288,9 +285,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
                     instr_block_items += self._get_bb_instrumentation(idx)
                     idx += 1
                 instr_block_items.append(block_item)
-                # the last BB
-                instr_block_items += self._get_bb_instrumentation(idx)
-                idx += 1
 
             ### if statement ###
             elif isinstance(block_item, If):
@@ -513,7 +507,7 @@ class OcludeInstrumentor(OpenCLCGenerator):
         # to BBs led us to counting the correct number of BBs
         # (i.e. the number of BBs in the respective LLVM bitcode).
         # It is of paramount importance that this assertion never fails!
-        # assert len(self.function_instrumentation_data) == bbs
+        assert len(self.function_instrumentation_data) == bbs
 
         return super().visit_FuncDef(n)
 
