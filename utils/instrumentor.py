@@ -22,6 +22,7 @@ class OcludeInstrumentor(OpenCLCGenerator):
         self.instrumentation_data = instrumentation_data
         self.function_instrumentation_data = None
         self.oclude_bool_var_idx = 1
+        self.return_bb = None
 
         self.kernelFuncs = kernelFuncs
 
@@ -86,7 +87,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
         ]
 
     def _get_bb_instrumentation(self, idx):
-        print('>>> NEXT INSTRUMENTATION BLOCK ASKED <<<')
         '''
         idx points to an entry of self.function_instrumentation_data, which is
         a list of tuples (instr_idx, instr_cnt), and creates the AST representation of the command
@@ -115,6 +115,9 @@ class OcludeInstrumentor(OpenCLCGenerator):
                               )
                 )
             )
+
+        #TODO: remove the following line
+        # instr.append(FuncCall(name=ID('HERE_A_BB_ENDS'), args=None))
 
         return instr
 
@@ -213,28 +216,7 @@ class OcludeInstrumentor(OpenCLCGenerator):
             print('!!!!!!!!!!!!!!!!!!!!!!!!! OUT (SAAAAAAAAAAAAAAAAAAAD) PROCESS UNROLLED COND !!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
             return cond_blocks, idx
 
-        # if len(cond_blocks) == 1 and isinstance(cond_blocks[0], Assignment):
-        #     cond_blocks = self._get_bb_instrumentation(idx) + cond_blocks
-        #     idx += 1
-        #     return cond_blocks, idx
-
         instr_cond_blocks = []
-
-        # done_with_first = False
-        # for i in range(len(cond_blocks)):
-        #     block = cond_blocks[i]
-        #     if isinstance(block, If):
-        #         if done_with_first:
-        #             instr_cond_blocks += self._get_bb_instrumentation(idx)
-        #             idx += 1
-        #         else:
-        #             done_with_first = True
-        #         instr_iffalse = self._get_bb_instrumentation(idx)
-        #         idx += 1
-        #         instr_iffalse_block, idx = self._process_unrolled_cond(block.iffalse.block_items, idx)
-        #         instr_iffalse_block = instr_iffalse + instr_iffalse_block
-        #         block.iffalse.block_items = instr_iffalse_block
-        #     instr_cond_blocks.append(block)
 
         for cond_block in cond_blocks:
             if isinstance(cond_block, If):
@@ -314,9 +296,16 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
                 instr_block_items.append(block_item)
 
-                # the last BB (i.e. if.end):
-                instr_block_items += self._get_bb_instrumentation(idx)
-                idx += 1
+                # we must not add extra bb if
+                # 1. there is else branch, and
+                # 2. both then and else branch ends with return
+                do_not_add_bb = block_item.iffalse is not None and \
+                                isinstance(block_item.iftrue.block_items[-1], Return) and \
+                                isinstance(block_item.iffalse.block_items[-1], Return)
+
+                if not do_not_add_bb:
+                    instr_block_items += self._get_bb_instrumentation(idx)
+                    idx += 1
 
             ### for statement ###
             elif isinstance(block_item, For):
@@ -435,6 +424,15 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
 
 
+            ### return statement BEFORE END OF FUNCTION ###
+            elif isinstance(block_item, Return) and idx < len(self.function_instrumentation_data) - 1:
+                if self.return_bb is None:
+                    last = len(self.function_instrumentation_data) - 1
+                    self.return_bb = self._get_bb_instrumentation(last)
+                instr_block_items += self.return_bb
+                instr_block_items.append(block_item)
+
+
             # case 2: right before a simple body item; nothing to do
             else:
                 print('\tIN ORDINARY (DO NOTHING)')
@@ -476,8 +474,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
         #         )
         #         if cond_block_list is not None:
         #             instr_block_items += cond_block_list
-        #
-        #     instr_block_items.append(block_item)
 
 
 
@@ -489,10 +485,21 @@ class OcludeInstrumentor(OpenCLCGenerator):
         '''
         self.function_instrumentation_data = self.instrumentation_data[n.decl.name]
         print('FUNCTION "' + n.decl.name + '" SHOULD HAVE', len(self.function_instrumentation_data), 'BBs')
+        ### step 0: clear return BB
+        self.return_bb = None
         ### step 1: add instrumentation instructions ###
         first_func_instr = self._get_bb_instrumentation(0)
         bbs, n.body = self._process_block(n.body, 1)
         n.body.block_items = first_func_instr + n.body.block_items
+        # add missing return bb at the end of function if multiple return statements were found
+        # or if the last statement was a compound one
+        if self.return_bb is not None:
+            if bbs < len(self.function_instrumentation_data):
+                bbs += 1
+                if isinstance(n.body.block_items[-1], Return):
+                    n.body.block_items[-1:-1] = self.return_bb
+                else:
+                    n.body.block_items += self.return_bb
         if n.decl.name in self.kernelFuncs:
             ### step 2: add prologue ###
             n.body.block_items = self.prologue + n.body.block_items
