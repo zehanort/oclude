@@ -268,16 +268,22 @@ class OcludeInstrumentor(OpenCLCGenerator):
                     block_item.init = cond_var
                     cond_block_list, idx = self._process_unrolled_cond(cond_block_list, idx)
                     instr_block_items += cond_block_list
+                    # the last BB
+                    instr_block_items += self._get_bb_instrumentation(idx)
+                    idx += 1
                 instr_block_items.append(block_item)
 
             ### (maybe) bool var assignment ###
             elif isinstance(block_item, Assignment):
-                print('\tIN VAR DECL')
+                print('\tIN VAR ASSIGNMENT')
                 cond_var, cond_block_list = self._unroll_cond_level(block_item.rvalue)
                 if cond_block_list is not None:
                     block_item.rvalue = cond_var
                     cond_block_list, idx = self._process_unrolled_cond(cond_block_list, idx)
                     instr_block_items += cond_block_list
+                    # the last BB
+                    instr_block_items += self._get_bb_instrumentation(idx)
+                    idx += 1
                 instr_block_items.append(block_item)
 
             ### if statement ###
@@ -312,28 +318,41 @@ class OcludeInstrumentor(OpenCLCGenerator):
                 instr_block_items += self._get_bb_instrumentation(idx)
                 idx += 1
 
-            # ### for statement ###
-            # elif isinstance(block_item, For):
-            #     print('\tIN FOR')
-            #     instr_block_items += self._get_bb_instrumentation(idx)
-            #     idx += 1
-            #     cond_var, cond_block_list = self._unroll_cond_level(block_item.cond)
-            #     # conditional BB
-            #     if cond_block_list is not None:
-            #         block_item.cond = cond_var
-            #         master_bool_var_decl = cond_block_list[0]
-            #         cond_block_list = cond_block_list[1:]
-            #         idx, cond_block_list = self._process_unrolled_cond(cond_block_list, idx)
-            #         instr_block_items += ([master_bool_var_decl] + cond_block_list)
-            #         # body BB
-            #         # repeat conditional BB inside for loop, at the end
-            #         # remove the declaration of the oclude bool var here
-            #         # (it is already declared before the for loop)
-            #         # (also remember that, per the LLVM layout, there is an inc BB
-            #         #  at the end of the for loop body)
-            #         for_body = [block_item.stmt] + cond_block_list
-            #         # done, replace body of for with the instrumented one
-            #         block_item.stmt = Compound(for_body)
+            ### for statement ###
+            elif isinstance(block_item, For):
+                print('\tIN FOR')
+
+                ############# IMPORTANT NOTE #############
+            	# we assume that we will not find        #
+            	# compound conditions if for statements, #
+            	# for simplicity                         #
+                ##########################################
+
+                # surely there is one cond BB
+                cond_instr_block_list = self._get_bb_instrumentation(idx)
+                idx += 1
+                # (possible) cond instrumentation
+                cond_var, cond_block_list = self._unroll_cond_level(block_item.cond)
+                if cond_block_list is not None:
+                    raise NotImplementedError('found for statement with compound condition')
+
+                instr_block_items += cond_instr_block_list
+
+                # body BB
+                body_instr = self._get_bb_instrumentation(idx)
+                idx += 1
+                idx, processed_body = self._process_block(block_item.stmt, idx)
+                # inc BB at the end of for
+                body_instr += self._get_bb_instrumentation(idx)
+                idx += 1
+                # add cond BB(s) at the end of for
+                for_body = [Compound(body_instr + processed_body.block_items)] + cond_instr_block_list
+                block_item.stmt.block_items = for_body
+                instr_block_items.append(block_item)
+
+                # the last BB (i.e. for.end):
+                instr_block_items += self._get_bb_instrumentation(idx)
+                idx += 1
 
             ### while statement ###
             elif isinstance(block_item, While):
@@ -372,18 +391,48 @@ class OcludeInstrumentor(OpenCLCGenerator):
                 instr_block_items += self._get_bb_instrumentation(idx)
                 idx += 1
 
+            ### do-while statement ###
+            elif isinstance(block_item, DoWhile):
+                print('\tIN DO WHILE')
 
-                # # conditional BB
-                # if cond_block_list is not None:
-                #     block_item.cond = cond_var
-                #     instr_block_items += cond_block_list
-                #     # body BB
-                #     # repeat conditional BB inside while loop, at the end
-                #     # remove the declaration of the oclude bool var here
-                #     # (it is already declared before the while loop)
-                #     while_body = [block_item.block_item] + cond_block_list[1:]
-                #     # done, replace body of while with the instrumented one
-                #     block_item.block_item = Compound(while_body)
+                # body BB
+                body_instr = self._get_bb_instrumentation(idx)
+                idx += 1
+                idx, processed_body = self._process_block(block_item.stmt, idx)
+
+                # surely there is one cond BB
+                cond_instr_block_list = self._get_bb_instrumentation(idx)
+                idx += 1
+                # (possible) cond instrumentation
+                cond_var, cond_block_list = self._unroll_cond_level(block_item.cond)
+                if cond_block_list is not None:
+                    cond_instr_block_list += self._get_bb_instrumentation(idx)
+                    idx += 1
+                    block_item.cond = cond_var
+                    cond_instr_block_list_extra, idx = self._process_unrolled_cond(cond_block_list, idx)
+                    cond_instr_block_list += cond_instr_block_list_extra
+
+                # get the declaration of the master bool var
+                try:
+                    master_bool_var_decl = next(x for x in cond_instr_block_list if isinstance(x, Decl))
+                except StopIteration:
+                    master_bool_var_decl = None
+                # remove the declaration of the master bool var
+                cond_instr_block_list = list(
+                    filterfalse(lambda x, c=count():
+                        isinstance(x, Decl) and next(c) < 1, cond_instr_block_list
+                    )
+                )
+                while_body = [Compound(body_instr + processed_body.block_items)] + cond_instr_block_list
+                block_item.stmt.block_items = while_body
+                if master_bool_var_decl is not None:
+                    instr_block_items.append(master_bool_var_decl)
+                instr_block_items.append(block_item)
+
+                # the last BB (i.e. while.end):
+                instr_block_items += self._get_bb_instrumentation(idx)
+                idx += 1
+
 
 
             # case 2: right before a simple body item; nothing to do
@@ -399,21 +448,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
 
                 # TODO: MUST ADD THESE TOO:
-        #     # do-while statement
-        #     elif isinstance(block_item, DoWhile):
-        #         cond_var, cond_block_list = self._unroll_cond_level(block_item.cond)
-        #         # before body BB, declare bool var if needed
-        #         if cond_block_list is not None:
-        #             block_item.cond = cond_var
-        #             instr_block_items.append(cond_block_list[0])
-        #             # body BB
-        #             # repeat conditional BB inside while loop, at the end
-        #             # remove the declaration of the oclude bool var here
-        #             # (it is already declared before the while loop)
-        #             while_body = [block_item.block_item] + cond_block_list[1:]
-        #             # done, replace body of while with the instrumented one
-        #             block_item.block_item = Compound(while_body)
-        #
         #     # ternary assignment
         #     elif isinstance(block_item, Assignment) and isinstance(block_item.rvalue, TernaryOp):
         #         lval = block_item.lvalue
