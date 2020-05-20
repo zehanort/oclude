@@ -94,8 +94,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
         Returns the list of these representations (i.e. AST nodes)
         '''
         instr = []
-        # TODO: remove the following line
-        idx = min(idx, len(self.function_instrumentation_data)-1)
         for instr_name, instr_cnt in self.function_instrumentation_data[idx]:
 
             if instr_name.startswith('retNOT'):
@@ -115,9 +113,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
                               )
                 )
             )
-
-        #TODO: remove the following line
-        # instr.append(FuncCall(name=ID('HERE_A_BB_ENDS'), args=None))
 
         return instr
 
@@ -206,14 +201,12 @@ class OcludeInstrumentor(OpenCLCGenerator):
         1. the instrumented version of cond_block_list
         2. the new idx
         '''
-        print('!!!!!!!!!!!!!!!!!!!!!!!!! IN PROCESS UNROLLED COND !!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         # important: there is a constant in this recursion:
         # THE INSTRUMENTATION OF THE BB THAT PRECEDES THIS LIST OF BLOCKS
         # HAS BEEN ADDED BY THE CALLER!
         # that means that we only get inside the first if cond_block
         # and we add nothing before it (only inside it)
         if cond_blocks is None:
-            print('!!!!!!!!!!!!!!!!!!!!!!!!! OUT (SAAAAAAAAAAAAAAAAAAAD) PROCESS UNROLLED COND !!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
             return cond_blocks, idx
 
         instr_cond_blocks = []
@@ -226,13 +219,15 @@ class OcludeInstrumentor(OpenCLCGenerator):
                 cond_block.iffalse.block_items = instr_iffalse + instr_iffalse_block
             instr_cond_blocks.append(cond_block)
 
-        print('!!!!!!!!!!!!!!!!!!!!!!!!! OUT PROCESS UNROLLED COND !!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         return instr_cond_blocks, idx
 
 
     def _process_block(self, block, idx):
 
         if block is None:
+            return idx, block
+        if block.block_items is None:
+            block.block_items = []
             return idx, block
 
         instr_block_items = []
@@ -243,7 +238,9 @@ class OcludeInstrumentor(OpenCLCGenerator):
             #         several subcases need to be taken into consideration
 
             ### (maybe) bool var init ###
-            if isinstance(block_item, Decl) and block_item.init is not None:
+            if isinstance(block_item, Decl) and block_item.init is not None and \
+            not isinstance(block_item.init, TernaryOp) and \
+            not (isinstance(block_item.init, BinaryOp) and not block_item.init.op in ['||', '&&']):
                 print('\tIN VAR DECL AND INIT')
                 cond_var, cond_block_list = self._unroll_cond_level(block_item.init)
                 if cond_block_list is not None:
@@ -256,7 +253,9 @@ class OcludeInstrumentor(OpenCLCGenerator):
                 instr_block_items.append(block_item)
 
             ### (maybe) bool var assignment ###
-            elif isinstance(block_item, Assignment):
+            elif isinstance(block_item, Assignment) and \
+            not isinstance(block_item.rvalue, TernaryOp) and \
+            not (isinstance(block_item.rvalue, BinaryOp) and not block_item.rvalue.op in ['||', '&&']):
                 print('\tIN VAR ASSIGNMENT')
                 cond_var, cond_block_list = self._unroll_cond_level(block_item.rvalue)
                 if cond_block_list is not None:
@@ -422,7 +421,149 @@ class OcludeInstrumentor(OpenCLCGenerator):
                 instr_block_items += self._get_bb_instrumentation(idx)
                 idx += 1
 
+            ### switch statement ###
+            elif isinstance(block_item, Switch):
+                instr_cases = []
+                for case in block_item.stmt.block_items:
+                    case_instrumentation = self._get_bb_instrumentation(idx)
+                    idx += 1
+                    idx, instr_case = self._process_block(Compound(case.stmts), idx)
+                    case.stmts = case_instrumentation + instr_case.block_items
+                    instr_cases.append(case)
+                block_item.stmt.block_items = instr_cases
+                instr_block_items.append(block_item)
+                # the last BB
+                instr_block_items += self._get_bb_instrumentation(idx)
+                idx += 1
 
+            ### ternary assignment ###
+            elif isinstance(block_item, Assignment) and \
+            block_item.op == '=' and isinstance(block_item.rvalue, TernaryOp):
+                print('\tIN TERNARY ASSIGNMENT')
+
+                lval = block_item.lvalue
+                ternary = block_item.rvalue
+                ternary_cond = ternary.cond
+                ternary_iftrue = Compound([Assignment(op='=', lvalue=lval, rvalue=ternary.iftrue)])
+                ternary_iffalse = Compound([Assignment(op='=', lvalue=lval, rvalue=ternary.iffalse)])
+                cond_var, cond_block_list = self._unroll_cond_level(ternary_cond)
+                if cond_block_list is not None:
+                    instr_block_items += cond_block_list
+                ternary_iftrue.block_items += self._get_bb_instrumentation(idx)
+                idx += 1
+                ternary_iffalse.block_items += self._get_bb_instrumentation(idx)
+                idx += 1
+                block_item = If(
+                    cond = cond_var,
+                    iftrue = ternary_iftrue,
+                    iffalse = ternary_iffalse
+                )
+                instr_block_items.append(block_item)
+
+                # after ternary BB
+                instr_block_items += self._get_bb_instrumentation(idx)
+                idx += 1
+
+            ### ternary init ###
+            elif isinstance(block_item, Decl) and isinstance(block_item.init, TernaryOp):
+                print('\tIN DECL WITH TERNARY INIT')
+
+                decl = block_item
+                lval = ID(decl.name)
+                ternary = decl.init
+                decl.init = None
+                decl.quals = []
+                decl.type.quals = []
+                instr_block_items.append(decl)
+
+                ternary_cond = ternary.cond
+                ternary_iftrue = Compound([Assignment(op='=', lvalue=lval, rvalue=ternary.iftrue)])
+                ternary_iffalse = Compound([Assignment(op='=', lvalue=lval, rvalue=ternary.iffalse)])
+                cond_var, cond_block_list = self._unroll_cond_level(ternary_cond)
+                if cond_block_list is not None:
+                    instr_block_items += cond_block_list
+                ternary_iftrue.block_items += self._get_bb_instrumentation(idx)
+                idx += 1
+                ternary_iffalse.block_items += self._get_bb_instrumentation(idx)
+                idx += 1
+                block_item = If(
+                    cond = cond_var,
+                    iftrue = ternary_iftrue,
+                    iffalse = ternary_iffalse
+                )
+                instr_block_items.append(block_item)
+
+                # after ternary BB
+                instr_block_items += self._get_bb_instrumentation(idx)
+                idx += 1
+
+            ### ternary compound init (i.e. a BinaryOp and ONLY one is TernaryOp) ###
+            elif isinstance(block_item, Decl) and isinstance(block_item.init, BinaryOp) and \
+            (isinstance(block_item.init.left, TernaryOp) or isinstance(block_item.init.right, TernaryOp)):
+                print('\tIN DECL WITH COMPOUND TERNARY INIT')
+
+                if isinstance(block_item.init.left, TernaryOp):
+                    left = None
+                    right = block_item.init.right
+                    ternary = block_item.init.left
+                else: # the right one is the ternary
+                    left = block_item.init.left
+                    right = None
+                    ternary = block_item.init.right
+
+                ternary_iftrue = ternary.iftrue
+                ternary_iffalse = ternary.iffalse
+
+                decl = block_item
+                lval = ID(decl.name)
+
+                op = block_item.init.op
+                if left is None:
+                    assignment = If(
+                        cond = ternary.cond,
+                        iftrue = Assignment(
+                            op = '=',
+                            lvalue = lval,
+                            rvalue = BinaryOp(op=op, left=ternary_iftrue, right=right)
+                        ),
+                        iffalse = Assignment(
+                            op = '=',
+                            lvalue = lval,
+                            rvalue = BinaryOp(op=op, left=ternary_iffalse, right=right)
+                        )
+                    )
+                else: # right is None
+                    assignment = If(
+                        cond = ternary.cond,
+                        iftrue = Assignment(
+                            op = '=',
+                            lvalue = lval,
+                            rvalue = BinaryOp(op=op, left=left, right=ternary_iftrue)
+                        ),
+                        iffalse = Assignment(
+                            op = '=',
+                            lvalue = lval,
+                            rvalue = BinaryOp(op=op, left=left, right=ternary_iffalse)
+                        )
+                    )
+
+                decl.init = None
+                decl.quals = []
+                decl.type.quals = []
+                instr_block_items.append(decl)
+
+                iftrue_instr = self._get_bb_instrumentation(idx)
+                idx += 1
+                iffalse_instr = self._get_bb_instrumentation(idx)
+                idx += 1
+                assignment.iftrue = Compound(iftrue_instr + [assignment.iftrue])
+                assignment.iffalse = Compound(iffalse_instr + [assignment.iffalse])
+
+                instr_block_items.append(assignment)
+
+                # after ternary BB
+                instr_block_items += self._get_bb_instrumentation(idx)
+                idx += 1
 
             ### return statement BEFORE END OF FUNCTION ###
             elif isinstance(block_item, Return) and idx < len(self.function_instrumentation_data) - 1:
@@ -432,7 +573,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
                 instr_block_items += self.return_bb
                 instr_block_items.append(block_item)
 
-
             # case 2: right before a simple body item; nothing to do
             else:
                 print('\tIN ORDINARY (DO NOTHING)')
@@ -440,44 +580,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
         block.block_items = instr_block_items
         return idx, block
-
-
-
-
-
-                # TODO: MUST ADD THESE TOO:
-        #     # ternary assignment
-        #     elif isinstance(block_item, Assignment) and isinstance(block_item.rvalue, TernaryOp):
-        #         lval = block_item.lvalue
-        #         ternary = block_item.rvalue
-        #         ternary_cond = ternary.cond
-        #         cond_var, cond_block_list = self._unroll_cond_level(ternary_cond)
-        #         ternary_iftrue = ternary.iftrue
-        #         ternary_iffalse = ternary.iffalse
-        #         block_item = If(
-        #             cond = cond_var,
-        #             iftrue = Compound([Assignment(op='=', lvalue=lval, rvalue=ternary_iftrue)]),
-        #             iffalse = Compound([Assignment(op='=', lvalue=lval, rvalue=ternary_iffalse)])
-        #         )
-        #         if cond_block_list is not None:
-        #             instr_block_items += cond_block_list
-        #
-        #     # ternary statement
-        #     elif isinstance(block_item, TernaryOp):
-        #         cond_var, cond_block_list = self._unroll_cond_level(block_item.cond)
-        #         iftrue = block_item.iftrue
-        #         iffalse = block_item.iffalse
-        #         block_item = If(
-        #             cond = cond_var,
-        #             iftrue = Compound([iftrue]),
-        #             iffalse = Compound([iffalse])
-        #         )
-        #         if cond_block_list is not None:
-        #             instr_block_items += cond_block_list
-
-
-
-
 
     def visit_FuncDef(self, n):
         '''
@@ -531,11 +633,6 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw, parser):
         instrs_per_bb = list(map(lambda x : list(map(lambda y : y.split(':')[-1], x.split('|')[1:]))[:-1], func_bbs))
         instrs_per_bb = list(map(lambda x : list(Counter(x).items()), instrs_per_bb))
         instrumentation_per_function[funcname] = instrs_per_bb
-
-    # print(len(instrumentation_per_function['calcLikelihoodSum']))
-    # for i, x in enumerate(instrumentation_per_function['calcLikelihoodSum'], 1):
-    #     print(i, ':', x)
-    # exit(0)
 
     # parsing done, time to add instrumentation to source code
     with open(filename, 'r') as f:

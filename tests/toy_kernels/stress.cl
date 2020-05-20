@@ -100,6 +100,18 @@ __kernel void fortest(__global int *buf) {
 	return;
 }
 
+__kernel void terntest(__global int *buf) {
+	int a, b, c, d, e, f, g, h, i, j;
+	a = 1;
+	b = 2;
+	c = 3;
+	d = (a > b) ? e + f : c * j;
+	int aaa = (!d) ? g + 2 : h * 3;
+	const int bbb = (!e) ? h + 2 : i % 3;
+	const int colId = 15 + ((a == 0) ? b%c : -3);
+	return;
+}
+
 /************************************************************************
  * this is function findIndexBin from particlefilter/particle_single.cl *
  ************************************************************************/
@@ -174,4 +186,52 @@ float tex1Dfetch(__read_only image2d_t img, int index){
 		if (imgPos == 2) return temp.z;
 		else return temp.w;
 	}
+}
+
+/***************************************************
+ * this is function divRndUp from dwt2d/com_dwt.cl *
+ ***************************************************/
+int divRndUp(int n,
+             int d)
+{
+    return (n / d) + ((n % d) ? 1 : 0);
+}
+
+/**************************************************************************
+ * this is the only switch of rodinia suite: myocyte/kernel_gpu_opencl.cl *
+ **************************************************************************/
+int fmod(int x, int y) { return x % y; }
+
+__kernel void switchtest(__global int *dummy) {
+	float I_app, R_clamp;
+	int timeinst = 2;
+	int cycleLength = 2;
+	int state = 1;
+	int V_hold, V_test, V_clamp, d_initvalu_39;
+	switch(state){
+		case 0:
+			I_app = 0;
+			break;
+		case 1:
+			if(fmod(timeinst,cycleLength) <= 5){
+				I_app = 9.5;
+			}
+			else{
+				I_app = 0.0;
+			}
+			break;
+		case 2:
+			V_hold = -55;
+			V_test = 0;
+			if(timeinst>0.5 & timeinst<200.5){
+				V_clamp = V_test;
+			}
+			else{
+				V_clamp = V_hold;
+			}
+			R_clamp = 0.04;
+			I_app = (V_clamp-d_initvalu_39)/R_clamp;
+			break;
+	}
+	state = 42;
 }
