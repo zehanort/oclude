@@ -7,11 +7,12 @@ from .interactor import Interactor
 from .constants import (
     llvm_instructions,
     hidden_counter_name_local,
-    hidden_counter_name_global
+    hidden_counter_name_global,
+    preprocessor
 )
 
 from pycparserext.ext_c_parser import OpenCLCParser
-from pycparser.c_ast import Decl, Struct, Typedef, FuncDef, TypeDecl, ArrayDecl
+from pycparser.c_ast import *
 
 from rvg import NumPyRVG
 import numpy as np
@@ -21,6 +22,21 @@ from time import time
 oclude_buffer_length = len(llvm_instructions)
 
 def create_struct_type(device, struct_name, struct):
+
+    def create_array_type(name, decl):
+        try:
+            dtype = eval(f'cltypes.{"".join(decl.type.type.type.names)}')
+        except AttributeError as e:
+            #TODO: something with that:
+            raise NotImplementedError('only primitive OpenCL types are supported for arrays inside structs')
+        if isinstance(decl.type.dim, Constant):
+            dims = int(decl.type.dim.value)
+        elif isinstance(decl.type.dim, BinaryOp) and decl.type.dim.op == '+':
+            dims = int(decl.type.dim.left.value) + int(decl.type.dim.right.value)
+        else:
+            raise NotImplementedError
+        return dtype, dims
+
     field_decls = struct.decls
     struct_fields = []
     # iterate over struct fields
@@ -33,8 +49,7 @@ def create_struct_type(device, struct_name, struct):
             struct_fields.append((field_name, eval(f'cltypes.{field_type}')))
         # field is an array (with defined size TODO: OR IDENTIFIER!!!)
         elif isinstance(field_decl.type, ArrayDecl):
-            raise NotImplementedError('arrays as struct fields are not supported yet')
-            struct_fields.append((field_name, create_array_type(field_name, field_decl)))
+            struct_fields.append((field_name, *create_array_type(field_name, field_decl)))
         else:
             raise NotImplementedError(f'field `{field_name}` of struct `{struct_name}` has a type that can not be understood')
 
