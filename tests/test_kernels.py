@@ -1,6 +1,5 @@
 import pytest
 import os
-import shutil
 from testutils import run_command
 
 ### SOME GLOBALS ###
