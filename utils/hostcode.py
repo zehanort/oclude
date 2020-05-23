@@ -24,13 +24,7 @@ oclude_buffer_length = len(llvm_instructions)
 def create_struct_type(device, struct_name, struct):
 
     def create_array_type(name, decl):
-        dtype_name = ''.join(decl.type.type.type.names)
-        try:
-            dtype = eval(f'cltypes.{dtype_name}')
-        except AttributeError as e:
-            # it is not a primitive OpenCL type,
-            # but a previously defined user type (i.e. struct)
-            dtype = get_or_register_dtype(dtype_name)
+        dtype = get_or_register_dtype(''.join(decl.type.type.type.names))
         if isinstance(decl.type.dim, Constant):
             dims = int(decl.type.dim.value)
         elif isinstance(decl.type.dim, BinaryOp) and decl.type.dim.op == '+':
@@ -48,8 +42,8 @@ def create_struct_type(device, struct_name, struct):
         if isinstance(field_decl.type, TypeDecl):
             type_name = ' '.join(field_decl.type.type.names)
             field_type = type_name if type_name != 'bool' else 'char'
-            struct_fields.append((field_name, eval(f'cltypes.{field_type}')))
-        # field is an array (with defined size TODO: OR IDENTIFIER!!!)
+            struct_fields.append((field_name, get_or_register_dtype(field_type)))
+        # field is an array with defined size
         elif isinstance(field_decl.type, ArrayDecl):
             struct_fields.append(create_array_type(field_name, field_decl))
         else:
