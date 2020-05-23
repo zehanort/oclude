@@ -192,7 +192,6 @@ def run():
         args.platform, args.device,
         args.verbose
     )
-    interact('Kernel run completed successfully')
 
     ### STEP 3: dump an oclgrind-like output (if requested by user) ###
     if args.instcounts:

@@ -208,13 +208,14 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
     time_finish = None
 
     event = kernel(queue, (GSIZE,), (GSIZE//WGROUPS,), *arg_bufs)
-    interact('Kernel run completed successfully')
 
     if timeit:
         event.wait()
         time_finish = time()
 
+    queue.flush()
     queue.finish()
+    interact('Kernel run completed successfully')
 
     ### step 6: read back the results and report them if requested
     results = {
