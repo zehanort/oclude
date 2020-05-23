@@ -4,6 +4,10 @@
 **/bin/
 **/.cache/
 
+# LLVM files
+**/.ll
+**/.bc
+
 **/*.pyc
 **/lextab.py
 **/yacctab.py
