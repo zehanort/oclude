@@ -24,18 +24,20 @@ oclude_buffer_length = len(llvm_instructions)
 def create_struct_type(device, struct_name, struct):
 
     def create_array_type(name, decl):
+        dtype_name = ''.join(decl.type.type.type.names)
         try:
-            dtype = eval(f'cltypes.{"".join(decl.type.type.type.names)}')
+            dtype = eval(f'cltypes.{dtype_name}')
         except AttributeError as e:
-            #TODO: something with that:
-            raise NotImplementedError('only primitive OpenCL types are supported for arrays inside structs')
+            # it is not a primitive OpenCL type,
+            # but a previously defined user type (i.e. struct)
+            dtype = get_or_register_dtype(dtype_name)
         if isinstance(decl.type.dim, Constant):
             dims = int(decl.type.dim.value)
         elif isinstance(decl.type.dim, BinaryOp) and decl.type.dim.op == '+':
             dims = int(decl.type.dim.left.value) + int(decl.type.dim.right.value)
         else:
             raise NotImplementedError
-        return dtype, dims
+        return name, dtype, dims
 
     field_decls = struct.decls
     struct_fields = []
@@ -49,7 +51,7 @@ def create_struct_type(device, struct_name, struct):
             struct_fields.append((field_name, eval(f'cltypes.{field_type}')))
         # field is an array (with defined size TODO: OR IDENTIFIER!!!)
         elif isinstance(field_decl.type, ArrayDecl):
-            struct_fields.append((field_name, *create_array_type(field_name, field_decl)))
+            struct_fields.append(create_array_type(field_name, field_decl))
         else:
             raise NotImplementedError(f'field `{field_name}` of struct `{struct_name}` has a type that can not be understood')
 
