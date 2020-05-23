@@ -241,7 +241,7 @@ class OcludeInstrumentor(OpenCLCGenerator):
             if isinstance(block_item, Decl) and block_item.init is not None and \
             not isinstance(block_item.init, TernaryOp) and \
             not (isinstance(block_item.init, BinaryOp) and not block_item.init.op in ['||', '&&']):
-                print('\tIN VAR DECL AND INIT')
+
                 cond_var, cond_block_list = self._unroll_cond_level(block_item.init)
                 if cond_block_list is not None:
                     block_item.init = cond_var
@@ -256,7 +256,7 @@ class OcludeInstrumentor(OpenCLCGenerator):
             elif isinstance(block_item, Assignment) and \
             not isinstance(block_item.rvalue, TernaryOp) and \
             not (isinstance(block_item.rvalue, BinaryOp) and not block_item.rvalue.op in ['||', '&&']):
-                print('\tIN VAR ASSIGNMENT')
+
                 cond_var, cond_block_list = self._unroll_cond_level(block_item.rvalue)
                 if cond_block_list is not None:
                     block_item.rvalue = cond_var
@@ -269,7 +269,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
             ### if statement ###
             elif isinstance(block_item, If):
-                print('\tIN IF')
 
                 # (possible) cond instrumentation
                 cond_var, cond_block_list = self._unroll_cond_level(block_item.cond)
@@ -308,7 +307,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
             ### for statement ###
             elif isinstance(block_item, For):
-                print('\tIN FOR')
 
                 ############# IMPORTANT NOTE #############
             	# we assume that we will not find        #
@@ -344,7 +342,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
             ### while statement ###
             elif isinstance(block_item, While):
-                print('\tIN WHILE')
 
                 # surely there is one cond BB
                 cond_instr_block_list = self._get_bb_instrumentation(idx)
@@ -381,7 +378,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
             ### do-while statement ###
             elif isinstance(block_item, DoWhile):
-                print('\tIN DO WHILE')
 
                 # body BB
                 body_instr = self._get_bb_instrumentation(idx)
@@ -439,7 +435,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
             ### ternary assignment ###
             elif isinstance(block_item, Assignment) and \
             block_item.op == '=' and isinstance(block_item.rvalue, TernaryOp):
-                print('\tIN TERNARY ASSIGNMENT')
 
                 lval = block_item.lvalue
                 ternary = block_item.rvalue
@@ -466,7 +461,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
             ### ternary init ###
             elif isinstance(block_item, Decl) and isinstance(block_item.init, TernaryOp):
-                print('\tIN DECL WITH TERNARY INIT')
 
                 decl = block_item
                 lval = ID(decl.name)
@@ -500,7 +494,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
             ### ternary compound init (i.e. a BinaryOp and ONLY one is TernaryOp) ###
             elif isinstance(block_item, Decl) and isinstance(block_item.init, BinaryOp) and \
             (isinstance(block_item.init.left, TernaryOp) or isinstance(block_item.init.right, TernaryOp)):
-                print('\tIN DECL WITH COMPOUND TERNARY INIT')
 
                 if isinstance(block_item.init.left, TernaryOp):
                     left = None
@@ -575,7 +568,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
             # case 2: right before a simple body item; nothing to do
             else:
-                print('\tIN ORDINARY (DO NOTHING)')
                 instr_block_items.append(block_item)
 
         block.block_items = instr_block_items
@@ -586,7 +578,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
         Overrides visit_FuncDef to add instrumentation
         '''
         self.function_instrumentation_data = self.instrumentation_data[n.decl.name]
-        print('FUNCTION "' + n.decl.name + '" SHOULD HAVE', len(self.function_instrumentation_data), 'BBs')
         ### step 0: clear return BB
         self.return_bb = None
         ### step 1: add instrumentation instructions ###
@@ -610,7 +601,6 @@ class OcludeInstrumentor(OpenCLCGenerator):
                 n.body.block_items = n.body.block_items[:-1] + self.epilogue + n.body.block_items[-1:]
             else:
                 n.body.block_items += self.epilogue
-        print('FUNCTION:', n.decl.name, 'COUNTED:', bbs)
 
         # the following assertion means that the way we mapped the source code
         # to BBs led us to counting the correct number of BBs
