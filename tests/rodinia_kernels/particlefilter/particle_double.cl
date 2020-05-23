@@ -1,10 +1,10 @@
-#if defined(cl_amd_fp64) || defined(cl_khr_fp64)
- 
-#if defined(cl_amd_fp64)
-#pragma OPENCL EXTENSION cl_amd_fp64 : enable
-#elif defined(cl_khr_fp64)
+// #if defined(cl_amd_fp64) || defined(cl_khr_fp64)
+//
+// #if defined(cl_amd_fp64)
+// #pragma OPENCL EXTENSION cl_amd_fp64 : enable
+// #elif defined(cl_khr_fp64)
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
-#endif
+// #endif
 
 /** added this function. was missing in original double version.
  * Takes in a double and returns an integer that approximates to that double
@@ -95,7 +95,7 @@ double updateWeights(__global double * weights, __global double * likelihood, in
 	for(x = 0; x < Nparticles; x++){
 		weights[x] = weights[x] * exp(likelihood[x]);
 		sum += weights[x];
-	}		
+	}
 	return sum;
 }
 
@@ -141,8 +141,8 @@ int findIndexBin(__global double * CDF, int beginIndex, int endIndex, double val
 * param7: weights
 * param8: Nparticles
 *****************************/
-__kernel void find_index_kernel(__global double * arrayX, __global double * arrayY, 
-	__global double * CDF, __global double * u, __global double * xj, 
+__kernel void find_index_kernel(__global double * arrayX, __global double * arrayY,
+	__global double * CDF, __global double * u, __global double * xj,
 	__global double * yj, __global double * weights, int Nparticles
 	){
 		int i = get_global_id(0);
@@ -251,11 +251,11 @@ __kernel void likelihood_kernel(__global double * arrayX, __global double * arra
         size_t THREADS_PER_BLOCK = get_local_size(0);
 	int y;
 	int indX, indY;
-	
-	
+
+
 	if(i < Nparticles){
-		arrayX[i] = xj[i]; 
-		arrayY[i] = yj[i]; 
+		arrayX[i] = xj[i];
+		arrayY[i] = yj[i];
 
 		weights[i] = 1 / ((double) (Nparticles)); //Donnie - moved this line from end of find_index_kernel to prevent all weights from being reset before calculating position on final iteration.
 
@@ -285,10 +285,10 @@ __kernel void likelihood_kernel(__global double * arrayX, __global double * arra
 		weights[i] = weights[i] * exp(likelihood[i]); //Donnie Newell - added the missing exponential function call
 
 	}
-	
+
 	buffer[thread_id] = 0.0; // DEBUG!!!!!!!!!!!!!!!!!!!!!!!!
 	//buffer[thread_id] = i;
-		
+
 	barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
 
 
@@ -312,7 +312,7 @@ __kernel void likelihood_kernel(__global double * arrayX, __global double * arra
 	{
 		partial_sums[block_id] = buffer[0];
 	}
-	
+
 }//*/
 
-#endif
+// #endif
