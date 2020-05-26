@@ -6,7 +6,7 @@ from testutils import run_command
 
 ### SOME GLOBALS ###
 testdir = os.path.dirname(os.path.abspath(__file__))
-cachedir = os.path.join(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0], 'utils', '.cache')
+cachedir = os.path.join(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0], 'oclude', 'utils', '.cache')
 SIZE = 1024
 WORK_GROUPS = 8
 

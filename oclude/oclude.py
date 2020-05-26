@@ -1,6 +1,6 @@
 import argparse
 import os
-import utils
+import oclude.utils as utils
 
 # define the arguments of oclude
 parser = argparse.ArgumentParser(
