@@ -5,8 +5,8 @@
 **/.cache/
 
 # LLVM files
-**/.ll
-**/.bc
+**/*.ll
+**/*.bc
 
 **/*.pyc
 **/lextab.py
