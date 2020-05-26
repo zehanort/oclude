@@ -123,22 +123,26 @@ inline instrumentation_t get_instrumentation_info_from_module() {
             print_message("\treporting about Basic Block #" + std::to_string(i));
             bb_instrumentation_t bb_instrumentation;
 
-            for (llvm::BasicBlock::const_iterator instr = bb->begin(); instr != bb->end(); instr++) {
-                llvm::MDNode *metadata = instr->getMetadata("dbg");
-                if (!metadata) continue;
+            for (const auto &instr : bb->instructionsWithoutDebug()) {
+                llvm::MDNode *metadata = instr.getMetadata("dbg");
                 llvm::DebugLoc loc(metadata);
-                print_message("\t\tinstruction " + (std::string)instr->getOpcodeName() + " from source code line " +
-                              std::to_string(loc.getLine()) + " column " + std::to_string(loc.getCol()));
-                if (loc.getLine() != 0) {
+                std::string extra_info = loc ? " from source code line " + std::to_string(loc.getLine()) +
+                                               " column " + std::to_string(loc.getCol())
+                                             : "";
+                print_message("\t\tinstruction " + (std::string)instr.getOpcodeName() + extra_info);
+                if (!loc || loc.getLine() != 0) {
                     /* special handling for load/store operations */
                     if (llvm::isa<llvm::LoadInst>(instr))
-                        bb_instrumentation.push_back(resolve_memop("load", instr, is_kernel));
+                        bb_instrumentation.push_back(resolve_memop("load", &instr, is_kernel));
                     else if (llvm::isa<llvm::StoreInst>(instr))
-                        bb_instrumentation.push_back(resolve_memop("store", instr, is_kernel));
-                    else if (llvm::isa<llvm::CallInst>(instr))
-                        bb_instrumentation.push_back(std::to_string(loc.getLine()) + ':' + "call");
+                        bb_instrumentation.push_back(resolve_memop("store", &instr, is_kernel));
+                    else if (llvm::isa<llvm::CallInst>(instr)) {
+                        /* we discard unlocalized calls as internal to LLVM */
+                        if (loc)
+                            bb_instrumentation.push_back(std::to_string(loc.getLine()) + ':' + "call");
+                    }
                     else
-                        bb_instrumentation.push_back(instr->getOpcodeName());
+                        bb_instrumentation.push_back(instr.getOpcodeName());
                 }
             }
 
