@@ -19,7 +19,7 @@ instrumentationGetter = os.path.join(bindir, 'instrumentation-parser')
 
 ### 3rd pass tools ###
 cl2llCompiler = 'clang'
-cl2llCompilerFlags = ['-g', '-O0', '-c', '-x', 'cl', '-emit-llvm', '-S', '-cl-std=CL2.0', '-Xclang',
+cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm', '-S', '-cl-std=CL2.0', '-Xclang',
                       '-finclude-default-header', '-fno-discard-value-names']
 
 def instrument_file(file, verbose):
@@ -74,7 +74,7 @@ def instrument_file(file, verbose):
     # WITHOUT allowing function inlining (to get pure data for each function)
 
     interact.run_command(
-        'Compiling source to LLVM bitcode (1/2)', cl2llCompiler, *cl2llCompilerFlags, '-fno-inline', '-o', templlvm, file
+        'Compiling source to LLVM bitcode (1/2)', cl2llCompiler, *cl2llCompilerFlags, '-O0', '-o', templlvm, file
     )
 
     instrumentation_data, _ = interact.run_command(
@@ -86,7 +86,7 @@ def instrument_file(file, verbose):
         with open(file, 'r') as f:
             ast = parser.parse(f.read())
         for ext in filter(lambda x : isinstance(x, FuncDef) and x.decl.name in inlinedFuncs, ast.ext):
-            func.decl.funcspec = ['inline'] + func.decl.funcspec
+            ext.decl.funcspec = ['inline'] + ext.decl.funcspec
         gen = OpenCLCGenerator()
         with open(file, 'w') as f:
             f.write(gen.visit(ast))
@@ -101,7 +101,7 @@ def instrument_file(file, verbose):
     # that means that each inlined function leads to 1 less "call" and 1 less "ret"
     inline_lines = [x.split()[0].split(':')[-3] for x in filter(lambda y : 'remark' in y, inliner_report.splitlines())]
     for inline_line in inline_lines:
-        instrumentation_data = instrumentation_data.replace(inline_line + ':call', 'retNOT', 1)
+        instrumentation_data = instrumentation_data.replace('|' + inline_line + ':call', '|retNOT', 1)
 
     # now add them to the source file, eventually instrumenting it
     add_instrumentation_data_to_file(file, kernelFuncs, instrumentation_data, parser)
