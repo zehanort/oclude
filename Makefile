@@ -1,8 +1,8 @@
 .PHONY: clean distclean default
 
-SRC=utils/src
-BIN=utils/bin
-INC=utils/inc
+SRC=oclude/utils/src
+BIN=oclude/utils/bin
+INC=oclude/utils/inc
 
 CXX=g++
 CXXFLAGS=-std=c++17 -O3 -Wall -Wno-ignored-attributes -Werror -I./$(INC)
