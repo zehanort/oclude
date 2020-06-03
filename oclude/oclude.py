@@ -99,12 +99,6 @@ def run():
         if input() != 'y':
             exit(0)
 
-    if args.gsize % args.lsize != 0:
-        interact('WARNING: Consider using a multiple of lsize for the gsize parameter.')
-        interact('Proceed? [y/N] ', nl=False)
-        if input() != 'y':
-            exit(0)
-
     ### STEP 1: cache checking (if needed) ###
     ##########################################
     #   1. was any of the flags below used?
