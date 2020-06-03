@@ -55,7 +55,7 @@ def create_struct_type(device, struct_name, struct):
     struct_dtype = get_or_register_dtype(struct_name, struct_dtype)
     return struct_dtype
 
-def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit, platform_id, device_id, verbose):
+def run_kernel(kernel_file_path, kernel_name, gsize, lsize, instcounts, timeit, platform_id, device_id, verbose):
     '''
     The hostcode wrapper function
     Essentially, it is nothing more than an OpenCL template hostcode,
@@ -157,7 +157,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
                 arg_types[kernel_arg_name] = typedefs[argtype_base]
 
     ### step 4: create argument buffers ###
-    rand = NumPyRVG(limit=GSIZE)
+    rand = NumPyRVG(limit=gsize)
     arg_hostbufs = []
     arg_bufs = []
     # will be needed to set scalar args
@@ -165,6 +165,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
     mem_flags = cl.mem_flags.READ_WRITE | cl.mem_flags.COPY_HOST_PTR
     hidden_global_hostbuf = None
     hidden_global_buf = None
+    wgroups = gsize // lsize
 
     for (argname, argtypename, argaddrqual), argtype in zip(args, arg_types.values()):
 
@@ -175,7 +176,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
             continue
         if argname == hidden_counter_name_global:
             which_are_scalar.append(None)
-            hidden_global_hostbuf = np.zeros(oclude_buffer_length * WGROUPS, dtype=argtype)
+            hidden_global_hostbuf = np.zeros(oclude_buffer_length * wgroups, dtype=argtype)
             arg_hostbufs.append(hidden_global_hostbuf)
             hidden_global_buf = cl.Buffer(context, mem_flags, hostbuf=hidden_global_hostbuf)
             arg_bufs.append(hidden_global_buf)
@@ -193,7 +194,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
         # argument is buffer
         else:
             which_are_scalar.append(None)
-            val = rand(argtype, GSIZE)
+            val = rand(argtype, gsize)
             arg_hostbufs.append(val)
             arg_bufs.append(
                 cl.Buffer(context, mem_flags, hostbuf=val) if not arg_is_local else cl.LocalMemory(len(val) * val.dtype.itemsize)
@@ -201,13 +202,13 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
 
     ### step 5: set kernel arguments and run it!
     kernel.set_scalar_arg_dtypes(which_are_scalar)
-    LSIZE = GSIZE//WGROUPS
-    interact(f'Enqueuing kernel with Global NDRange = {GSIZE} and Local NDRange = {LSIZE}')
+    interact(f'Enqueuing kernel with Global NDRange = {gsize} and Local NDRange = {lsize}')
 
-    time_start = time()
-    time_finish = None
+    if timeit:
+        time_start = time()
+        time_finish = None
 
-    event = kernel(queue, (GSIZE,), (GSIZE//WGROUPS,), *arg_bufs)
+    event = kernel(queue, (gsize,), (lsize,), *arg_bufs)
 
     if timeit:
         event.wait()
@@ -227,13 +228,13 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
     }
 
     if instcounts:
-        interact('Collecting instruction counts')
+        interact('Collecting instruction counts...')
         global_counter = np.empty_like(hidden_global_hostbuf)
         cl.enqueue_copy(queue, global_counter, hidden_global_buf)
 
         final_counter = [0 for _ in range(oclude_buffer_length)]
         for i in range(oclude_buffer_length):
-            for j in range(WGROUPS):
+            for j in range(wgroups):
                 final_counter[i] += global_counter[i + j * oclude_buffer_length]
 
         results['instcounts'] = {
@@ -241,7 +242,7 @@ def run_kernel(kernel_file_path, kernel_name, GSIZE, WGROUPS, instcounts, timeit
         }
 
     if timeit:
-        interact('Collecting time profiling info, please wait')
+        interact('Collecting time profiling info...')
         # kernel profiling
         hostcode_time_elapsed = (time_finish - time_start) * 1000
         device_time_elapsed = (event.profile.end - event.profile.start) * 1e-6

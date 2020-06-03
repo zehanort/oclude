@@ -17,17 +17,16 @@ parser.add_argument('-k', '--kernel',
     help='the name of the kernel to run from the input file'
 )
 
-parser.add_argument('-s', '--size',
+parser.add_argument('-g', '--gsize',
     type=int,
-    help='the size of the buffer arguments of the kernel',
+    help='The global NDRange, i.e. the size of the buffer arguments of the kernel',
     required=True
 )
 
-parser.add_argument('-w', '--work-groups',
+parser.add_argument('-l', '--lsize',
     type=int,
-    help='the total number of work groups',
-    required=True,
-    dest='work_groups'
+    help='The local NDRange, i.e. the number of work items in a work group',
+    required=True
 )
 
 parser.add_argument('-p', '--platform',
@@ -100,12 +99,8 @@ def run():
         if input() != 'y':
             exit(0)
 
-    if args.size < args.work_groups or args.size % args.work_groups != 0:
-        interact('size must be a multiple of work_groups')
-        exit(1)
-
-    if args.size // args.work_groups <= 8:
-        interact('WARNING: Size not being greater than 8 * work_groups will most likely lead to invalid results.')
+    if args.gsize % args.lsize != 0:
+        interact('WARNING: Consider using a multiple of lsize for the gsize parameter.')
         interact('Proceed? [y/N] ', nl=False)
         if input() != 'y':
             exit(0)
@@ -187,7 +182,7 @@ def run():
     interact(f'Running kernel {args.kernel} from file {args.infile}')
     results = utils.run_kernel(
         infile, args.kernel,
-        args.size, args.work_groups,
+        args.gsize, args.lsize,
         args.instcounts, args.timeit,
         args.platform, args.device,
         args.verbose
@@ -205,7 +200,7 @@ def run():
         kernel_results_lines = []
         kernel_results = results['timeit']['kernel']
         indent = max(len(timing_scope) for timing_scope in kernel_results.keys())
-        print(f"Time measurement info regarding the execution time for kernel '{args.kernel}' (in milliseconds):")
+        print(f"Time measurement info regarding the execution for kernel '{args.kernel}' (in milliseconds):")
         for timing_scope, time_elapsed in kernel_results.items():
             kernel_results_lines.append(f'{timing_scope:{indent}} - {time_elapsed}')
 

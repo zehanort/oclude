@@ -2,13 +2,9 @@ import pytest
 import os
 import shutil
 from tempfile import gettempdir
-from testutils import run_command
+from testutils import *
 
-### SOME GLOBALS ###
-testdir = os.path.dirname(os.path.abspath(__file__))
 cachedir = os.path.join(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0], 'oclude', 'utils', '.cache')
-SIZE = 1024
-WORK_GROUPS = 8
 
 src1 = '''
 __kernel void vadd(__global float* a, __constant float* b, __global float* c, const unsigned int count)
@@ -90,10 +86,10 @@ def test_kernel_files_same_name():
     errors = []
 
     # run first kernel
-    output1, error1, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
+    output1, error1, retcode1 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
 
     # run second kernel
-    output2, error2, retcode2 = run_command(f"oclude {kernel2} -s {SIZE} -w {WORK_GROUPS} -k vmul")
+    output2, error2, retcode2 = run_command(f"oclude {kernel2} -g {GSIZE} -l {LSIZE} -k vmul")
 
     assert retcode1 == 0
     assert error1.splitlines()[0].strip().endswith('is not cached')
@@ -103,10 +99,10 @@ def test_kernel_files_same_name():
 def test_same_kernel_file_twice():
 
     # run first kernel
-    _, error1, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
+    _, error1, retcode1 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
 
     # run first kernel again!
-    _, error2, retcode2 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
+    _, error2, retcode2 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
 
     assert retcode1 == 0
     assert error1.splitlines()[0].strip().endswith('is not cached')
@@ -116,13 +112,13 @@ def test_same_kernel_file_twice():
 def test_clear_cache_flag():
 
     # dummy kernel to ensure caching
-    _, _, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
+    _, _, retcode1 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
 
     # dummy kernel again to see that now it is cached
-    _, error2, retcode2 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
+    _, error2, retcode2 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
 
     # dummy kernel again once more to see that it is not cached after clearing
-    _, error3, retcode3 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd --clear-cache")
+    _, error3, retcode3 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd --clear-cache")
     [error3_first_line, error3_second_line] = error3.splitlines()[0:2]
 
     assert retcode1 == 0
@@ -135,13 +131,13 @@ def test_clear_cache_flag():
 def test_ignore_cache_flag():
 
     # dummy kernel to ensure caching
-    _, _, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
+    _, _, retcode1 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
 
     # dummy kernel again to see that now it is cached
-    _, error2, retcode2 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
+    _, error2, retcode2 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
 
     # dummy kernel again once more to see that now we ignore cache
-    _, error3, retcode3 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd --ignore-cache")
+    _, error3, retcode3 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd --ignore-cache")
 
     assert retcode1 == 0
     assert retcode2 == 0
@@ -157,10 +153,10 @@ def test_no_cache_warnings():
             f.write('A')
 
     # dummy kernel to produce cache warning
-    _, error1, retcode1 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd")
+    _, error1, retcode1 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
 
     # dummy kernel to suppress cache warning
-    _, error2, retcode2 = run_command(f"oclude {kernel1} -s {SIZE} -w {WORK_GROUPS} -k vadd --no-cache-warnings")
+    _, error2, retcode2 = run_command(f"oclude {kernel1} -g {GSIZE} -l {LSIZE} -k vadd --no-cache-warnings")
 
     os.remove(large_garbage)
 
