@@ -158,7 +158,6 @@ def run_kernel(kernel_file_path, kernel_name, gsize, lsize, instcounts, timeit, 
 
     ### step 4: create argument buffers ###
     rand = NumPyRVG(limit=gsize)
-    arg_hostbufs = []
     arg_bufs = []
     # will be needed to set scalar args
     which_are_scalar = []
@@ -177,7 +176,6 @@ def run_kernel(kernel_file_path, kernel_name, gsize, lsize, instcounts, timeit, 
         if argname == hidden_counter_name_global:
             which_are_scalar.append(None)
             hidden_global_hostbuf = np.zeros(oclude_buffer_length * wgroups, dtype=argtype)
-            arg_hostbufs.append(hidden_global_hostbuf)
             hidden_global_buf = cl.Buffer(context, mem_flags, hostbuf=hidden_global_hostbuf)
             arg_bufs.append(hidden_global_buf)
             continue
@@ -189,13 +187,11 @@ def run_kernel(kernel_file_path, kernel_name, gsize, lsize, instcounts, timeit, 
         if len(argtypename_split) == 1:
             which_are_scalar.append(argtype)
             val = rand(argtype)
-            arg_hostbufs.append(val)
             arg_bufs.append(val if not arg_is_local else cl.LocalMemory(val.itemsize))
         # argument is buffer
         else:
             which_are_scalar.append(None)
             val = rand(argtype, gsize)
-            arg_hostbufs.append(val)
             arg_bufs.append(
                 cl.Buffer(context, mem_flags, hostbuf=val) if not arg_is_local else cl.LocalMemory(len(val) * val.dtype.itemsize)
             )
