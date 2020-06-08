@@ -17,6 +17,10 @@ from pycparser.c_ast import *
 from rvg import NumPyRVG
 import numpy as np
 import os
+from tqdm import trange
+from functools import reduce
+from collections import Counter
+import operator
 from time import time
 
 oclude_buffer_length = len(llvm_instructions)
@@ -55,7 +59,50 @@ def create_struct_type(device, struct_name, struct):
     struct_dtype = get_or_register_dtype(struct_name, struct_dtype)
     return struct_dtype
 
-def run_kernel(kernel_file_path, kernel_name, gsize, lsize, instcounts, timeit, platform_id, device_id, verbose):
+def init_kernel_arguments(context, args, arg_types, gsize, lsize):
+
+    arg_bufs, which_are_scalar = [], []
+    hidden_global_hostbuf, hidden_global_buf = None, None
+    mem_flags = cl.mem_flags.READ_WRITE | cl.mem_flags.COPY_HOST_PTR
+    rand = NumPyRVG(limit=gsize)
+
+    for (argname, argtypename, argaddrqual), argtype in zip(args, arg_types.values()):
+
+        # special handling of oclude hidden buffers
+        if argname == hidden_counter_name_local:
+            which_are_scalar.append(None)
+            arg_bufs.append(cl.LocalMemory(oclude_buffer_length * argtype(0).itemsize))
+            continue
+        if argname == hidden_counter_name_global:
+            which_are_scalar.append(None)
+            hidden_global_hostbuf = np.zeros(oclude_buffer_length * (gsize // lsize), dtype=argtype)
+            hidden_global_buf = cl.Buffer(context, mem_flags, hostbuf=hidden_global_hostbuf)
+            arg_bufs.append(hidden_global_buf)
+            continue
+
+        argtypename_split = argtypename.split('*')
+        argtypename_base = argtypename_split[0]
+        arg_is_local = argaddrqual == 'local'
+        # argument is scalar
+        if len(argtypename_split) == 1:
+            which_are_scalar.append(argtype)
+            val = rand(argtype)
+            arg_bufs.append(val if not arg_is_local else cl.LocalMemory(val.itemsize))
+        # argument is buffer
+        else:
+            which_are_scalar.append(None)
+            val = rand(argtype, gsize)
+            arg_bufs.append(
+                cl.Buffer(context, mem_flags, hostbuf=val) if not arg_is_local else cl.LocalMemory(len(val) * val.dtype.itemsize)
+            )
+
+    return arg_bufs, which_are_scalar, hidden_global_hostbuf, hidden_global_buf
+
+def run_kernel(kernel_file_path, kernel_name,
+               gsize, lsize, samples,
+               platform_id, device_id,
+               instcounts, timeit, device_profiling,
+               verbose):
     '''
     The hostcode wrapper function
     Essentially, it is nothing more than an OpenCL template hostcode,
@@ -156,106 +203,98 @@ def run_kernel(kernel_file_path, kernel_name, gsize, lsize, instcounts, timeit, 
             except KeyError:
                 arg_types[kernel_arg_name] = typedefs[argtype_base]
 
-    ### step 4: create argument buffers ###
-    rand = NumPyRVG(limit=gsize)
-    arg_bufs = []
-    # will be needed to set scalar args
-    which_are_scalar = []
-    mem_flags = cl.mem_flags.READ_WRITE | cl.mem_flags.COPY_HOST_PTR
-    hidden_global_hostbuf = None
-    hidden_global_buf = None
-    wgroups = gsize // lsize
+    ### run the kernel as many times are requested by the user ###
+    interact(f'About to execute kernel with Global NDRange = {gsize} and Local NDRange = {lsize}')
+    interact(f'Number of executions (a.k.a. samples) to perform: {max(samples, 1)}')
 
-    for (argname, argtypename, argaddrqual), argtype in zip(args, arg_types.values()):
+    n_executions = trange(samples, unit=' kernel executions') if samples > 1 else range(1)
+    results = []
 
-        # special handling of oclude hidden buffers
-        if argname == hidden_counter_name_local:
-            which_are_scalar.append(None)
-            arg_bufs.append(cl.LocalMemory(oclude_buffer_length * argtype(0).itemsize))
-            continue
-        if argname == hidden_counter_name_global:
-            which_are_scalar.append(None)
-            hidden_global_hostbuf = np.zeros(oclude_buffer_length * wgroups, dtype=argtype)
-            hidden_global_buf = cl.Buffer(context, mem_flags, hostbuf=hidden_global_hostbuf)
-            arg_bufs.append(hidden_global_buf)
-            continue
+    for _ in n_executions:
 
-        argtypename_split = argtypename.split('*')
-        argtypename_base = argtypename_split[0]
-        arg_is_local = argaddrqual == 'local'
-        # argument is scalar
-        if len(argtypename_split) == 1:
-            which_are_scalar.append(argtype)
-            val = rand(argtype)
-            arg_bufs.append(val if not arg_is_local else cl.LocalMemory(val.itemsize))
-        # argument is buffer
-        else:
-            which_are_scalar.append(None)
-            val = rand(argtype, gsize)
-            arg_bufs.append(
-                cl.Buffer(context, mem_flags, hostbuf=val) if not arg_is_local else cl.LocalMemory(len(val) * val.dtype.itemsize)
-            )
+        ### step 4: create argument buffers ###
+        (
+            arg_bufs,
+            which_are_scalar,
+            hidden_global_hostbuf,
+            hidden_global_buf
+        ) = init_kernel_arguments(context, args, arg_types, gsize, lsize)
 
-    ### step 5: set kernel arguments and run it!
-    kernel.set_scalar_arg_dtypes(which_are_scalar)
-    interact(f'Enqueuing kernel with Global NDRange = {gsize} and Local NDRange = {lsize}')
+        ### step 5: set kernel arguments and run it!
+        kernel.set_scalar_arg_dtypes(which_are_scalar)
 
-    if timeit:
-        time_start = time()
-        time_finish = None
+        if timeit:
+            time_start = time()
+            time_finish = None
 
-    event = kernel(queue, (gsize,), (lsize,), *arg_bufs)
+        event = kernel(queue, (gsize,), (lsize,), *arg_bufs)
 
-    if timeit:
-        event.wait()
-        time_finish = time()
+        if timeit:
+            event.wait()
+            time_finish = time()
 
-    queue.flush()
-    queue.finish()
-    interact('Kernel run completed successfully')
+        queue.flush()
+        queue.finish()
 
-    ### step 6: read back the results and report them if requested
-    results = {
-        'instcounts': None,
-        'timeit': {
-            'kernel': None,
-            'general': None
-        }
-    }
+        ### step 6: read back the results and report them if requested
+        results.append({})
+
+        if instcounts:
+            if not samples > 1:
+                interact('Collecting instruction counts...')
+            global_counter = np.empty_like(hidden_global_hostbuf)
+            cl.enqueue_copy(queue, global_counter, hidden_global_buf)
+
+            final_counter = [0 for _ in range(oclude_buffer_length)]
+            for i in range(oclude_buffer_length):
+                for j in range(gsize // lsize):
+                    final_counter[i] += global_counter[i + j * oclude_buffer_length]
+            results[-1]['instcounts'] = dict(zip(llvm_instructions, final_counter))
+
+        if timeit:
+            if not samples > 1:
+                interact('Collecting time profiling info...')
+            hostcode_time_elapsed = (time_finish - time_start) * 1000
+            device_time_elapsed = (event.profile.end - event.profile.start) * 1e-6
+            results[-1]['timeit'] = {
+                'hostcode': hostcode_time_elapsed,
+                'device': device_time_elapsed,
+                'transfer': hostcode_time_elapsed - device_time_elapsed
+            }
+
+    interact('Kernel run' + ('s' if samples > 1 else '') + ' completed successfully')
+
+    # reduce all runs to a single dict of results
+    reduced_results = {}
 
     if instcounts:
-        interact('Collecting instruction counts...')
-        global_counter = np.empty_like(hidden_global_hostbuf)
-        cl.enqueue_copy(queue, global_counter, hidden_global_buf)
-
-        final_counter = [0 for _ in range(oclude_buffer_length)]
-        for i in range(oclude_buffer_length):
-            for j in range(wgroups):
-                final_counter[i] += global_counter[i + j * oclude_buffer_length]
-
-        results['instcounts'] = {
-            k: v for k, v in sorted(dict(zip(llvm_instructions, final_counter)).items(), key=lambda item: item[1], reverse=True)
+        if samples > 1:
+            interact(f'Calculating average instruction counts over {samples} samples...')
+        reduced_results['instcounts'] = dict(
+            reduce(operator.add, map(Counter, map(lambda x : x['instcounts'], results)))
+        )
+        reduced_results['instcounts'] = {
+            k : v // (samples if samples > 0 else 1) for k, v in reduced_results['instcounts'].items()
         }
 
     if timeit:
-        interact('Collecting time profiling info...')
-        # kernel profiling
-        hostcode_time_elapsed = (time_finish - time_start) * 1000
-        device_time_elapsed = (event.profile.end - event.profile.start) * 1e-6
+        if samples > 1:
+            interact(f'Calculating average time profiling info over {samples} samples...')
+        reduced_results['timeit'] = dict(
+            reduce(operator.add, map(Counter, map(lambda x : x['timeit'], results)))
+        )
+        reduced_results['timeit'] = {
+            k : v // (samples if samples > 0 else 1) for k, v in reduced_results['timeit'].items()
+        }
 
-        # general profiling
+    if device_profiling:
+        interact('Collecting device profiling info...')
         prof_overhead, latency = clperf.get_profiling_overhead(context)
         h2d_latency = clperf.transfer_latency(queue, clperf.HostToDeviceTransfer) * 1000
         d2h_latency = clperf.transfer_latency(queue, clperf.DeviceToHostTransfer) * 1000
         d2d_latency = clperf.transfer_latency(queue, clperf.DeviceToDeviceTransfer) * 1000
 
-        results['timeit']['kernel'] = {
-            'hostcode': hostcode_time_elapsed,
-            'device': device_time_elapsed,
-            'transfer': hostcode_time_elapsed - device_time_elapsed
-        }
-
-        results['timeit']['general'] = {
+        reduced_results['device_profiling'] = {
             'profiling overhead (time)': prof_overhead * 1000,
             'profiling overhead (percentage)': f'{(100 * prof_overhead / latency):.2f}%',
             'command latency': latency * 1000,
@@ -264,4 +303,4 @@ def run_kernel(kernel_file_path, kernel_name, gsize, lsize, instcounts, timeit, 
             'device-to-device transfer latency': d2d_latency
         }
 
-    return results
+    return reduced_results

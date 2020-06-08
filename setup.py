@@ -1,4 +1,7 @@
-from distutils.core import setup
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
 
 setup(
     name =             'oclude',
@@ -9,7 +12,7 @@ setup(
     author_email =     'sot.niarchos@gmail.com',
     url =              'https://github.com/zehanort/oclude',
 
-    install_requires = ['pycparserext>=2020.1', 'pyopencl>=2020.1', 'rvg'],
+    install_requires = ['pycparserext>=2020.1', 'pyopencl>=2020.1', 'rvg', 'tqdm'],
     python_requires =  '>=3.6',
     entry_points =     { 'console_scripts': ['oclude=oclude.oclude:run'] }
 )

@@ -41,6 +41,12 @@ parser.add_argument('-d', '--device',
     default=0
 )
 
+parser.add_argument('-s', '--samples',
+    type=int,
+    help='number of times to execute the given kernel (note that each execution is initialized with different values)',
+    default=1
+)
+
 parser.add_argument('-v', '--verbose',
     help='toggle verbose output (default: false)',
     action='store_true'
@@ -55,6 +61,12 @@ parser.add_argument('-i', '--inst-counts',
 parser.add_argument('-t', '--time-it',
     help='measure kernel execution time and dump it to stdout',
     dest='timeit',
+    action='store_true'
+)
+
+parser.add_argument('--device-profiling',
+    help='get profiling info regarding the selected OpenCL device',
+    dest='device_profiling',
     action='store_true'
 )
 
@@ -177,38 +189,29 @@ def run():
     results = utils.run_kernel(
         infile, args.kernel,
         args.gsize, args.lsize,
-        args.instcounts, args.timeit,
+        args.samples,
         args.platform, args.device,
+        args.instcounts, args.timeit, args.device_profiling,
         args.verbose
     )
 
     ### STEP 3: dump an oclgrind-like output (if requested by user) ###
     if args.instcounts:
         print(f"Instructions executed for kernel '{args.kernel}':")
-        for instname, instcount in results['instcounts'].items():
+        for instname, instcount in sorted(results['instcounts'].items(), key=lambda item : item[1], reverse=True):
             if instcount != 0:
-                print(f'{instcount : 16} - {instname}')
+                print(f'{instcount:16} - {instname}')
 
     if args.timeit:
-        # kernel profiling first...
-        kernel_results_lines = []
-        kernel_results = results['timeit']['kernel']
+        kernel_results = results['timeit']
         indent = max(len(timing_scope) for timing_scope in kernel_results.keys())
         print(f"Time measurement info regarding the execution for kernel '{args.kernel}' (in milliseconds):")
         for timing_scope, time_elapsed in kernel_results.items():
-            kernel_results_lines.append(f'{timing_scope:{indent}} - {time_elapsed}')
+            print(f'{timing_scope:>{indent}} - {time_elapsed}')
 
-        # ...then general profiling info
-        general_results_lines = []
-        general_results = results['timeit']['general']
-        indent = max(len(profiling_category) for profiling_category in general_results.keys())
-        for profiling_category, time_info in general_results.items():
-            general_results_lines.append(f'{profiling_category:{indent}} - {time_info}')
-
-        barrier = '=' * max(len(line) for line in kernel_results_lines + general_results_lines)
-
-        for line in kernel_results_lines:
-            print(line)
-        print(barrier)
-        for line in general_results_lines:
-            print(line)
+    if args.device_profiling:
+        device_prof_results = results['device_profiling']
+        indent = max(len(profiling_category) for profiling_category in device_prof_results.keys())
+        print('Profiling info for selected OpenCL device:')
+        for profiling_category, time_info in device_prof_results.items():
+            print(f'{profiling_category:>{indent}} - {time_info}')
