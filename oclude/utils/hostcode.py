@@ -315,22 +315,26 @@ def run_kernel(kernel_file_path, kernel_name,
 
     if instcounts:
         if samples > 1:
-            interact(f'Calculating average instruction counts over {samples} samples...')
+            interact(f'Calculating average instruction counts over {samples} samples... ', nl=False)
         reduced_results['instcounts'] = dict(
             reduce(operator.add, map(Counter, map(lambda x : x['instcounts'], results)))
         )
         reduced_results['instcounts'] = {
             k : v // (samples if samples > 0 else 1) for k, v in reduced_results['instcounts'].items()
         }
+        if samples > 1:
+            interact('done', prompt=False)
 
     if timeit:
         if samples > 1:
-            interact(f'Calculating average time profiling info over {samples} samples...')
+            interact(f'Calculating average time profiling info over {samples} samples... ', nl=False)
         reduced_results['timeit'] = dict(
             reduce(operator.add, map(Counter, map(lambda x : x['timeit'], results)))
         )
         reduced_results['timeit'] = {
             k : v // (samples if samples > 0 else 1) for k, v in reduced_results['timeit'].items()
         }
+        if samples > 1:
+            interact('done', prompt=False)
 
     return reduced_results
