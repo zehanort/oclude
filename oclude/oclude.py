@@ -96,39 +96,29 @@ parser.add_argument('--no-cache-warnings',
     action='store_true'
 )
 
-###############################
-### MAIN FUNCTION OF OCLUDE ###
-###############################
-def run():
-
-    args = parser.parse_args()
+def profile_opencl_kernel(file, kernel,
+                          gsize, lsize,
+                          platform=0, device=0,
+                          samples=1,
+                          instcounts=False, timeit=False,
+                          verbose=False,
+                          clear_cache=False, ignore_cache=False, no_cache_warnings=False):
 
     interact = utils.Interactor(__file__.split(os.sep)[-1])
-    interact.set_verbosity(args.verbose)
-
-    if args.command == 'device':
-        device_prof_results = utils.get_device_profile(args.platform, args.device, args.verbose)
-        indent = max(len(profiling_category) for profiling_category in device_prof_results.keys())
-        print('Profiling info for selected OpenCL device:')
-        for profiling_category, time_info in device_prof_results.items():
-            print(f'{profiling_category:>{indent}} - {time_info}')
-        exit(0)
+    interact.set_verbosity(verbose)
 
     # some sanity checks
-    if not args.lsize or not args.gsize:
+    if not lsize or not gsize:
         interact(f'ERROR: arguments -g/--gsize and -l/--lsize are required')
         exit(1)
 
-    if not os.path.exists(args.file):
-        interact(f'ERROR: Input file {args.file} does not exist.')
+    if not os.path.exists(file):
+        interact(f'ERROR: Input file {file} does not exist.')
         exit(1)
 
-    if args.instcounts and args.timeit:
+    if instcounts and timeit:
         interact('WARNING: Instruction count and execution time measurement were both requested.')
         interact('This will result in the time measurement of the instrumented kernel and not the original.')
-        interact('Proceed? [y/N] ', nl=False)
-        if input() != 'y':
-            exit(0)
 
     ### STEP 1: cache checking (if needed) ###
     ##########################################
@@ -146,42 +136,42 @@ def run():
 
     cache = utils.CachedFiles()
 
-    if cache.size > 10 * 1024 * 1024 and not args.no_cache_warnings:
+    if cache.size > 10 * 1024 * 1024 and not no_cache_warnings:
         interact('WARNING: Cache size exceeds 10 MiB, which is a lot. Consider running oclude with `--clear-cache`')
 
-    if args.clear_cache:
+    if clear_cache:
         interact('INFO: Clearing cache')
         cache.clear()
 
     is_cached = False
-    if args.ignore_cache:
+    if ignore_cache:
         interact('INFO: Ignoring cache')
     else:
-        is_cached = cache.file_is_cached(args.file)
-        interact(f"INFO: Input file {args.file} is {'' if is_cached else 'not '}cached")
+        is_cached = cache.file_is_cached(file)
+        interact(f"INFO: Input file {file} is {'' if is_cached else 'not '}cached")
 
     # step 1.1
-    if args.instcounts:
-        file = cache.get_name_of_instrumented_file(args.file)
-        if is_cached and not args.ignore_cache:
+    if instcounts:
+        instrumented_file = cache.get_name_of_instrumented_file(file)
+        if is_cached and not ignore_cache:
             interact('INFO: Using cached instrumented file')
         else:
             interact('Instrumenting source file')
-            cache.copy_file_to_cache(args.file)
-            utils.instrument_file(file, args.verbose)
-    else:
-        file = args.file
-        if not is_cached:
             cache.copy_file_to_cache(file)
+            utils.instrument_file(instrumented_file, verbose)
+    else:
+        instrumented_file = file
+        if not is_cached:
+            cache.copy_file_to_cache(instrumented_file)
 
     # step 1.2
-    file_kernels = cache.get_file_kernels(args.file)
-    if not args.kernel or args.kernel not in file_kernels:
-        if args.kernel:
-            interact(f"ERROR: No kernel function named '{args.kernel}' exists in file '{args.file}'")
-        interact(f"A list of the kernels that exist in file '{args.file}':")
-        for i, kernel in enumerate(file_kernels, 1):
-            interact(f'\t{i}. {kernel}')
+    file_kernels = cache.get_file_kernels(file)
+    if not kernel or kernel not in file_kernels:
+        if kernel:
+            interact(f"ERROR: No kernel function named '{kernel}' exists in file '{file}'")
+        interact(f"A list of the kernels that exist in file '{file}':")
+        for i, kernel_name in enumerate(file_kernels, 1):
+            interact(f'\t{i}. {kernel_name}')
         # input file contains only one kernel
         if len(file_kernels) == 1:
             interact('Do you want to run the above kernel? [Y/n] ', nl=False)
@@ -200,19 +190,38 @@ def run():
                 if not 0 <= inp < len(file_kernels):
                     interact(f'Should have chosen between 1 and {len(file_kernels)}. Please try again')
                     exit(1)
-        args.kernel = file_kernels[inp]
-        interact(f"Continuing with kernel '{args.kernel}'")
+        kernel = file_kernels[inp]
+        interact(f"Continuing with kernel '{kernel}'")
 
     ### STEP 2: run the kernel ###
-    interact(f'Running kernel {args.kernel} from file {args.file}')
-    results = utils.run_kernel(
-        file, args.kernel,
-        args.gsize, args.lsize,
-        args.samples,
-        args.platform, args.device,
-        args.instcounts, args.timeit,
-        args.verbose
+    interact(f'Running kernel {kernel} from file {file}')
+    return utils.run_kernel(
+        instrumented_file, kernel,
+        gsize, lsize,
+        platform, device,
+        samples,
+        instcounts, timeit,
+        verbose
     )
+
+###############################
+### MAIN FUNCTION OF OCLUDE ###
+###############################
+def run():
+
+    args = parser.parse_args()
+
+    if args.command == 'device':
+        device_prof_results = utils.profile_opencl_device(args.platform, args.device, args.verbose)
+        indent = max(len(profiling_category) for profiling_category in device_prof_results.keys())
+        print('Profiling info for selected OpenCL device:')
+        for profiling_category, time_info in device_prof_results.items():
+            print(f'{profiling_category:>{indent}} - {time_info}')
+        exit(0)
+
+    args_dict = vars(args)
+    del args_dict['command']
+    results = profile_opencl_kernel(**args_dict)
 
     ### STEP 3: dump an oclgrind-like output (if requested by user) ###
     if args.instcounts:

@@ -3,8 +3,8 @@ import pyopencl.cltypes as cltypes
 from pyopencl.tools import get_or_register_dtype, match_dtype_to_c_struct
 import pyopencl.characterize.performance as clperf
 
-from .interactor import Interactor
-from .constants import (
+from oclude.utils.interactor import Interactor
+from oclude.utils.constants import (
     llvm_instructions,
     hidden_counter_name_local,
     hidden_counter_name_global,
@@ -98,7 +98,7 @@ def init_kernel_arguments(context, args, arg_types, gsize, lsize):
 
     return arg_bufs, which_are_scalar, hidden_global_hostbuf, hidden_global_buf
 
-def get_device_profile(platform_id, device_id, verbose):
+def profile_opencl_device(platform_id=0, device_id=0, verbose=False):
 
     interact = Interactor(__file__.split(os.sep)[-1])
     interact.set_verbosity(verbose)
@@ -142,8 +142,9 @@ def get_device_profile(platform_id, device_id, verbose):
     return device_profile
 
 def run_kernel(kernel_file_path, kernel_name,
-               gsize, lsize, samples,
+               gsize, lsize,
                platform_id, device_id,
+               samples,
                instcounts, timeit,
                verbose):
     '''
