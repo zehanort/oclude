@@ -26,7 +26,7 @@ class OcludeFormatter(OpenCLCGenerator):
                 type=TypeDecl(
                     declname=hidden_counter_name_local,
                     quals=['__local'],
-                    type=IdentifierType(names=['uint'])
+                    type=IdentifierType(names=['ulong'])
                 )
             ),
             init=None,
@@ -43,7 +43,7 @@ class OcludeFormatter(OpenCLCGenerator):
                 type=TypeDecl(
                     declname=hidden_counter_name_global,
                     quals=['__global'],
-                    type=IdentifierType(names=['uint'])
+                    type=IdentifierType(names=['ulong'])
                 )
             ),
             init=None,
