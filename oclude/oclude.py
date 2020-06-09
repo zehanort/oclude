@@ -23,8 +23,7 @@ parser.add_argument('command',
 
 parser.add_argument('-f', '--file',
     type=str,
-    help='the *.cl file with the OpenCL kernel(s)',
-    dest='infile'
+    help='the *.cl file with the OpenCL kernel(s)'
 )
 
 parser.add_argument('-k', '--kernel',
@@ -120,8 +119,8 @@ def run():
         interact(f'ERROR: arguments -g/--gsize and -l/--lsize are required')
         exit(1)
 
-    if not os.path.exists(args.infile):
-        interact(f'ERROR: Input file {args.infile} does not exist.')
+    if not os.path.exists(args.file):
+        interact(f'ERROR: Input file {args.file} does not exist.')
         exit(1)
 
     if args.instcounts and args.timeit:
@@ -158,29 +157,29 @@ def run():
     if args.ignore_cache:
         interact('INFO: Ignoring cache')
     else:
-        is_cached = cache.file_is_cached(args.infile)
-        interact(f"INFO: Input file {args.infile} is {'' if is_cached else 'not '}cached")
+        is_cached = cache.file_is_cached(args.file)
+        interact(f"INFO: Input file {args.file} is {'' if is_cached else 'not '}cached")
 
     # step 1.1
     if args.instcounts:
-        infile = cache.get_name_of_instrumented_file(args.infile)
+        file = cache.get_name_of_instrumented_file(args.file)
         if is_cached and not args.ignore_cache:
             interact('INFO: Using cached instrumented file')
         else:
             interact('Instrumenting source file')
-            cache.copy_file_to_cache(args.infile)
-            utils.instrument_file(infile, args.verbose)
+            cache.copy_file_to_cache(args.file)
+            utils.instrument_file(file, args.verbose)
     else:
-        infile = args.infile
+        file = args.file
         if not is_cached:
-            cache.copy_file_to_cache(infile)
+            cache.copy_file_to_cache(file)
 
     # step 1.2
-    file_kernels = cache.get_file_kernels(args.infile)
+    file_kernels = cache.get_file_kernels(args.file)
     if not args.kernel or args.kernel not in file_kernels:
         if args.kernel:
-            interact(f"ERROR: No kernel function named '{args.kernel}' exists in file '{args.infile}'")
-        interact(f"A list of the kernels that exist in file '{args.infile}':")
+            interact(f"ERROR: No kernel function named '{args.kernel}' exists in file '{args.file}'")
+        interact(f"A list of the kernels that exist in file '{args.file}':")
         for i, kernel in enumerate(file_kernels, 1):
             interact(f'\t{i}. {kernel}')
         # input file contains only one kernel
@@ -205,9 +204,9 @@ def run():
         interact(f"Continuing with kernel '{args.kernel}'")
 
     ### STEP 2: run the kernel ###
-    interact(f'Running kernel {args.kernel} from file {args.infile}')
+    interact(f'Running kernel {args.kernel} from file {args.file}')
     results = utils.run_kernel(
-        infile, args.kernel,
+        file, args.kernel,
         args.gsize, args.lsize,
         args.samples,
         args.platform, args.device,
