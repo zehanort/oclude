@@ -16,7 +16,7 @@ llvm_instructions = [
     'ret', 'br', 'switch', 'indirectbr', 'invoke', 'call', 'callbr', 'resume', 'catchswitch',
     'catchret', 'cleanupret', 'unreachable', 'trunc', 'zext', 'sext', 'fptrunc', 'fpext',
     'fptoui', 'fptosi', 'uitofp', 'sitofp', 'ptrtoint', 'inttoptr', 'bitcast', 'addrspacecast',
-    'icmp', 'fcmp', 'phi', 'select', 'freeze', 'call', 'va_arg',
+    'icmp', 'fcmp', 'phi', 'select', 'freeze', 'va_arg',
     'landingpad', 'catchpad', 'cleanuppad'
 ]
 

@@ -1,9 +1,9 @@
 import os
 
-from .interactor import Interactor
-from .constants import *
-from .formatter import OcludeFormatter
-from .instrumentor import add_instrumentation_data_to_file
+from oclude.utils.interactor import Interactor
+from oclude.utils.constants import *
+from oclude.utils.formatter import OcludeFormatter
+from oclude.utils.instrumentor import add_instrumentation_data_to_file
 
 from pycparserext.ext_c_parser import OpenCLCParser
 from pycparserext.ext_c_generator import OpenCLCGenerator

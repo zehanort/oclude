@@ -1,4 +1,4 @@
-from .constants import hidden_counter_name_local, hidden_counter_name_global
+from oclude.utils.constants import hidden_counter_name_local, hidden_counter_name_global
 
 from pycparserext.ext_c_generator import OpenCLCGenerator
 from pycparser.c_ast import *

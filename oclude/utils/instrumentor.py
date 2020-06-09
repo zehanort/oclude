@@ -1,6 +1,6 @@
 from pycparserext.ext_c_generator import OpenCLCGenerator
 from pycparser.c_ast import *
-from .constants import (
+from oclude.utils.constants import (
     llvm_instructions,
     hidden_counter_name_local,
     hidden_counter_name_global
