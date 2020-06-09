@@ -288,7 +288,7 @@ def run_kernel(kernel_file_path, kernel_name,
         }
 
     if device_profiling:
-        interact('Collecting device profiling info...')
+        interact('Collecting device profiling info. Please wait, this may take a while...')
         prof_overhead, latency = clperf.get_profiling_overhead(context)
         h2d_latency = clperf.transfer_latency(queue, clperf.HostToDeviceTransfer) * 1000
         d2h_latency = clperf.transfer_latency(queue, clperf.DeviceToHostTransfer) * 1000
@@ -302,5 +302,17 @@ def run_kernel(kernel_file_path, kernel_name,
             'device-to-host transfer latency': d2h_latency,
             'device-to-device transfer latency': d2d_latency
         }
+
+        for tx_type, tx_type_name in zip(
+                    [clperf.HostToDeviceTransfer, clperf.DeviceToHostTransfer, clperf.DeviceToDeviceTransfer],
+                    ['host-device', 'device-host', 'device-device']
+                ):
+            for i in range(6, 31, 2):
+                bs = 1 << i
+                try:
+                    bw = str(clperf.transfer_bandwidth(queue, tx_type, bs)/1e9) + ' GB/s'
+                except Exception as e:
+                    bw = 'exception: ' + e.__class__.__name__
+                reduced_results['device_profiling'][f'{tx_type_name} bandwidth @ {bs} bytes'] = bw
 
     return reduced_results
