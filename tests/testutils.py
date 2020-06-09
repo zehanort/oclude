@@ -16,7 +16,7 @@ def run_kernel(kernelfile, kernel):
     kernelfilepath = os.path.join(testdir, kernelfile)
 
     errors = []
-    command = f'oclude {kernelfilepath} -k {kernel} -g {GSIZE} -l {LSIZE} -i'
+    command = f'oclude kernel -f {kernelfilepath} -k {kernel} -g {GSIZE} -l {LSIZE} -i'
     output, error, retcode = run_command(command)
 
     # skip empty output tests to differentiate them from other failures

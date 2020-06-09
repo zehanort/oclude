@@ -98,10 +98,53 @@ def init_kernel_arguments(context, args, arg_types, gsize, lsize):
 
     return arg_bufs, which_are_scalar, hidden_global_hostbuf, hidden_global_buf
 
+def get_device_profile(platform_id, device_id, verbose):
+
+    interact = Interactor(__file__.split(os.sep)[-1])
+    interact.set_verbosity(verbose)
+
+    platform = cl.get_platforms()[platform_id]
+    device = platform.get_devices()[device_id]
+    context = cl.Context([device])
+    queue = cl.CommandQueue(context, properties=cl.command_queue_properties.PROFILING_ENABLE)
+
+    interact('Collecting profiling info for the following device:')
+    interact('Platform:\t' + platform.name)
+    interact('Device:\t' + device.name)
+    interact('Version:\t' + device.version.strip())
+    interact('Please wait, this may take a while...')
+    prof_overhead, latency = clperf.get_profiling_overhead(context)
+    h2d_latency = clperf.transfer_latency(queue, clperf.HostToDeviceTransfer) * 1000
+    d2h_latency = clperf.transfer_latency(queue, clperf.DeviceToHostTransfer) * 1000
+    d2d_latency = clperf.transfer_latency(queue, clperf.DeviceToDeviceTransfer) * 1000
+
+    device_profile = {
+        'profiling overhead (time)': prof_overhead * 1000,
+        'profiling overhead (percentage)': f'{(100 * prof_overhead / latency):.2f}%',
+        'command latency': latency * 1000,
+        'host-to-device transfer latency': h2d_latency,
+        'device-to-host transfer latency': d2h_latency,
+        'device-to-device transfer latency': d2d_latency
+    }
+
+    for tx_type, tx_type_name in zip(
+                [clperf.HostToDeviceTransfer, clperf.DeviceToHostTransfer, clperf.DeviceToDeviceTransfer],
+                ['host-device', 'device-host', 'device-device']
+            ):
+        for i in range(6, 31, 2):
+            bs = 1 << i
+            try:
+                bw = str(clperf.transfer_bandwidth(queue, tx_type, bs)/1e9) + ' GB/s'
+            except Exception as e:
+                bw = 'exception: ' + e.__class__.__name__
+            device_profile[f'{tx_type_name} bandwidth @ {bs} bytes'] = bw
+
+    return device_profile
+
 def run_kernel(kernel_file_path, kernel_name,
                gsize, lsize, samples,
                platform_id, device_id,
-               instcounts, timeit, device_profiling,
+               instcounts, timeit,
                verbose):
     '''
     The hostcode wrapper function
@@ -116,10 +159,12 @@ def run_kernel(kernel_file_path, kernel_name,
     ### build the kernel program and create a queue      ###
     # TODO: some OpenCL-related checks
     platform = cl.get_platforms()[platform_id]
-    interact(f'Using platform: {platform.name}')
-
     device = platform.get_devices()[device_id]
-    interact(f'Using device: {device.name} (device OpenCL version: {device.version.strip()})')
+
+    interact('Using the following device:')
+    interact('Platform:\t' + platform.name)
+    interact('Device:\t' + device.name)
+    interact('Version:\t' + device.version.strip())
 
     context = cl.Context([device])
     with open(kernel_file_path, 'r') as kernel_file:
@@ -286,33 +331,5 @@ def run_kernel(kernel_file_path, kernel_name,
         reduced_results['timeit'] = {
             k : v // (samples if samples > 0 else 1) for k, v in reduced_results['timeit'].items()
         }
-
-    if device_profiling:
-        interact('Collecting device profiling info. Please wait, this may take a while...')
-        prof_overhead, latency = clperf.get_profiling_overhead(context)
-        h2d_latency = clperf.transfer_latency(queue, clperf.HostToDeviceTransfer) * 1000
-        d2h_latency = clperf.transfer_latency(queue, clperf.DeviceToHostTransfer) * 1000
-        d2d_latency = clperf.transfer_latency(queue, clperf.DeviceToDeviceTransfer) * 1000
-
-        reduced_results['device_profiling'] = {
-            'profiling overhead (time)': prof_overhead * 1000,
-            'profiling overhead (percentage)': f'{(100 * prof_overhead / latency):.2f}%',
-            'command latency': latency * 1000,
-            'host-to-device transfer latency': h2d_latency,
-            'device-to-host transfer latency': d2h_latency,
-            'device-to-device transfer latency': d2d_latency
-        }
-
-        for tx_type, tx_type_name in zip(
-                    [clperf.HostToDeviceTransfer, clperf.DeviceToHostTransfer, clperf.DeviceToDeviceTransfer],
-                    ['host-device', 'device-host', 'device-device']
-                ):
-            for i in range(6, 31, 2):
-                bs = 1 << i
-                try:
-                    bw = str(clperf.transfer_bandwidth(queue, tx_type, bs)/1e9) + ' GB/s'
-                except Exception as e:
-                    bw = 'exception: ' + e.__class__.__name__
-                reduced_results['device_profiling'][f'{tx_type_name} bandwidth @ {bs} bytes'] = bw
 
     return reduced_results

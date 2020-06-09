@@ -4,12 +4,27 @@ import oclude.utils as utils
 
 # define the arguments of oclude
 parser = argparse.ArgumentParser(
-    description='oclude - the OpenCL universal driving environment'
+    description='oclude - the OpenCL universal driving environment',
+    formatter_class=argparse.RawTextHelpFormatter
 )
 
-parser.add_argument('infile',
+parser.add_argument('command',
     type=str,
-    help='the *.cl file with the OpenCL kernel(s)'
+    nargs='?',
+    choices=['kernel', 'device'],
+    help='''oclude supports the following commands:
+
+   kernel    Profile an OpenCL kernel from a given source file
+             (default if <command> is ommited)
+   device    Profile the selected OpenCL device
+             (only -p and -d flags are taken into consideration)''',
+    default='kernel'
+)
+
+parser.add_argument('-f', '--file',
+    type=str,
+    help='the *.cl file with the OpenCL kernel(s)',
+    dest='infile'
 )
 
 parser.add_argument('-k', '--kernel',
@@ -19,14 +34,12 @@ parser.add_argument('-k', '--kernel',
 
 parser.add_argument('-g', '--gsize',
     type=int,
-    help='The global NDRange, i.e. the size of the buffer arguments of the kernel',
-    required=True
+    help='The global NDRange, i.e. the size of the buffer arguments of the kernel'
 )
 
 parser.add_argument('-l', '--lsize',
     type=int,
-    help='The local NDRange, i.e. the number of work items in a work group',
-    required=True
+    help='The local NDRange, i.e. the number of work items in a work group'
 )
 
 parser.add_argument('-p', '--platform',
@@ -49,7 +62,8 @@ parser.add_argument('-s', '--samples',
 
 parser.add_argument('-v', '--verbose',
     help='toggle verbose output (default: false)',
-    action='store_true'
+    action='store_true',
+    default=False
 )
 
 parser.add_argument('-i', '--inst-counts',
@@ -61,12 +75,6 @@ parser.add_argument('-i', '--inst-counts',
 parser.add_argument('-t', '--time-it',
     help='measure kernel execution time and dump it to stdout',
     dest='timeit',
-    action='store_true'
-)
-
-parser.add_argument('--device-profiling',
-    help='get profiling info regarding the selected OpenCL device',
-    dest='device_profiling',
     action='store_true'
 )
 
@@ -99,7 +107,19 @@ def run():
     interact = utils.Interactor(__file__.split(os.sep)[-1])
     interact.set_verbosity(args.verbose)
 
+    if args.command == 'device':
+        device_prof_results = utils.get_device_profile(args.platform, args.device, args.verbose)
+        indent = max(len(profiling_category) for profiling_category in device_prof_results.keys())
+        print('Profiling info for selected OpenCL device:')
+        for profiling_category, time_info in device_prof_results.items():
+            print(f'{profiling_category:>{indent}} - {time_info}')
+        exit(0)
+
     # some sanity checks
+    if not args.lsize or not args.gsize:
+        interact(f'ERROR: arguments -g/--gsize and -l/--lsize are required')
+        exit(1)
+
     if not os.path.exists(args.infile):
         interact(f'ERROR: Input file {args.infile} does not exist.')
         exit(1)
@@ -191,13 +211,13 @@ def run():
         args.gsize, args.lsize,
         args.samples,
         args.platform, args.device,
-        args.instcounts, args.timeit, args.device_profiling,
+        args.instcounts, args.timeit,
         args.verbose
     )
 
     ### STEP 3: dump an oclgrind-like output (if requested by user) ###
     if args.instcounts:
-        print(f"Instructions executed for kernel '{args.kernel}':")
+        print(f"Instructions executed for kernel '{args.kernel}'" + (' (average):' if args.samples > 1 else ':'))
         for instname, instcount in sorted(results['instcounts'].items(), key=lambda item : item[1], reverse=True):
             if instcount != 0:
                 print(f'{instcount:16} - {instname}')
@@ -205,13 +225,7 @@ def run():
     if args.timeit:
         kernel_results = results['timeit']
         indent = max(len(timing_scope) for timing_scope in kernel_results.keys())
-        print(f"Time measurement info regarding the execution for kernel '{args.kernel}' (in milliseconds):")
+        print(f"Time measurement info regarding the execution for kernel '{args.kernel}' ("
+                + ('average, ' if args.samples > 1 else '') + "in milliseconds):")
         for timing_scope, time_elapsed in kernel_results.items():
             print(f'{timing_scope:>{indent}} - {time_elapsed}')
-
-    if args.device_profiling:
-        device_prof_results = results['device_profiling']
-        indent = max(len(profiling_category) for profiling_category in device_prof_results.keys())
-        print('Profiling info for selected OpenCL device:')
-        for profiling_category, time_info in device_prof_results.items():
-            print(f'{profiling_category:>{indent}} - {time_info}')
