@@ -2,27 +2,60 @@
 
 [![CodeFactor](https://www.codefactor.io/repository/github/zehanort/oclude/badge)](https://www.codefactor.io/repository/github/zehanort/oclude)
 
-`oclude` is a command line tool to run and test arbitrary standalone OpenCL kernels, without the need to write hostcode or specify its arguments.
+`oclude` is a command line tool and a Python 3 module to run and test arbitrary standalone OpenCL kernels, without the need to write hostcode or specify its arguments.
 
 Besides simply running the OpenCL kernel, `oclude` can also:
 - measure its execution time,
-- count the instructions executed through an accurate and meaningful mapping from the OpenCL kernel code to the LLVM instruction set, created by using the `clang` toolkit.
+- count the instructions executed through an accurate and meaningful mapping from the OpenCL kernel code to the LLVM instruction set, created by using the `clang` toolkit,
+- profile a specified OpenCL device.
 
 ## Current Status
 
-The project is under (rather heavy) development and should not be considered functional yet.
-
-Further documentation will be added when the project reaches its BETA version.
+The project is currently functional, with some limitations regarding mainly the complexity of the OpenCL C source code provided to it.
+More specifically, successful handling of OpenCL source files that are more complicated than the [rodinia benchmark suite](tests/rodinia_kernels) is **not** guaranteed.
 
 ## System dependencies
 
-(specifics to be added soon, roughly `LLVM`, `clang` and, obviously, an OpenCL runtime environment)
+\* *Keep in mind that proper behavior is **not** guaranteed if different versions than the ones that are listed below are used.*
 
-## Python dependencies
+At least for now, `oclude` is developed and expected to work on \*nix operating systems only.
 
-(specifics to be added soon, but no need to worry, installing `oclude` from `pip` will take care of these for you - that is, when its author feels confident enough to upload it)
+- `python`, version >= 3.6
+- `setuptools` is recommended
+
+In case you want to use `oclude` as an OpenCL kernel driver only or measure the execution time of OpenCL kernels only:
+- An `OpenCL` runtime environment. Have in mind that installing `oclude` results in also installing `pyopencl` which means that, depending on your case, this dependency may get automatically resolved.
+
+In case you want to use `oclude` as an OpenCL kernel profiler (i.e. get LLVM instruction counts):
+- The `clang` compiler (tested with version `10.0.0` that was installed along with `LLVM`)
+- `g++` with `C++17` (or later) support
+- `LLVM` (tested with version `10.0.0git`. You can check your version by running `llvm-config --version` in a terminal. Tested with version `3.8` and did **not** work, so my guess is that you will need something quite higher than that)
+
+## Installation
+
+*For the time being, `oclude` is not available in `PyPI`. This is hopefully going to change in the future.*
+
+1. `git clone` the repo and `cd` inside it:
+```
+git clone git@github.com:zehanort/oclude.git
+cd oclude
+```
+2. (optional) If you need to use `oclude` as a full OpenCL kernel profiler (i.e. count `LLVM` instructions executed), you will need to build a `C++` component of `oclude`. Simply run `make` in the directory you are currently at. If any errors occur, your `g++` and/or `LLVM` versions are not compatible with `oclude`. Ignore this step; you want be able to use `oclude` as a full OpenCL kernel profiler (unless you change your `g++` and/or `LLVM` versions, obviously)
+3. Install `oclude` on your system or inside a virtual environment (e.g. using `venv`). From the directory you are currently at, run:
+```
+pip install .
+```
+or
+```
+pip install -e .
+```
+in case you would like to experiment with the `oclude` code.
 
 ## Modes of operation
+
+\* *The modes of operation will be presented using the `CLI` of `oclude`. For its Python 3 module usage, see next section.*
+
+\*\* *WARNING: This section is **DEPRECATED**; will be updated ASAP*
 
 `oclude` can be used to simply run an OpenCL kernel, with nothing else actually happening. Explaining the usage below (you can see all flags with `oclude -h`)
 - Firstly, an OpenCL kernel file (\*.cl) must be specified
