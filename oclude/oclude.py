@@ -194,8 +194,8 @@ def profile_opencl_kernel(file, kernel,
         interact(f"Continuing with kernel '{kernel}'")
 
     ### STEP 2: run the kernel ###
-    interact(f'Running kernel {kernel} from file {file}')
-    return utils.run_kernel(
+    interact(f"Running kernel '{kernel}' from file {file}")
+    kernel_run_results = utils.run_kernel(
         instrumented_file, kernel,
         gsize, lsize,
         platform, device,
@@ -203,6 +203,11 @@ def profile_opencl_kernel(file, kernel,
         instcounts, timeit,
         verbose
     )
+    kernel_run_results['original file'] = file
+    kernel_run_results['instrumented file'] = instrumented_file if instrumented_file != file else None
+    kernel_run_results['kernel'] = kernel
+
+    return kernel_run_results
 
 ###############################
 ### MAIN FUNCTION OF OCLUDE ###
@@ -215,8 +220,13 @@ def run():
         device_prof_results = utils.profile_opencl_device(args.platform, args.device, args.verbose)
         indent = max(len(profiling_category) for profiling_category in device_prof_results.keys())
         print('Profiling info for selected OpenCL device:')
-        for profiling_category, time_info in device_prof_results.items():
-            print(f'{profiling_category:>{indent}} - {time_info}')
+        for profiling_category, profiling_info in device_prof_results.items():
+            if isinstance(profiling_info, dict):
+                for k, v in profiling_info.items():
+                    category_name = f'{profiling_category} bandwidth @ {k}'
+                    print(f'{category_name0:>{indent}} - {v}')
+            else:
+                print(f'{profiling_category:>{indent}} - {profiling_info}')
         exit(0)
 
     args_dict = vars(args)
@@ -224,8 +234,9 @@ def run():
     results = profile_opencl_kernel(**args_dict)
 
     ### STEP 3: dump an oclgrind-like output (if requested by user) ###
+    selected_kernel = results['kernel']
     if args.instcounts:
-        print(f"Instructions executed for kernel '{args.kernel}'" + (' (average):' if args.samples > 1 else ':'))
+        print(f"Instructions executed for kernel '{selected_kernel}'" + (' (average):' if args.samples > 1 else ':'))
         for instname, instcount in sorted(results['instcounts'].items(), key=lambda item : item[1], reverse=True):
             if instcount != 0:
                 print(f'{instcount:16} - {instname}')
@@ -233,7 +244,7 @@ def run():
     if args.timeit:
         kernel_results = results['timeit']
         indent = max(len(timing_scope) for timing_scope in kernel_results.keys())
-        print(f"Time measurement info regarding the execution for kernel '{args.kernel}' ("
+        print(f"Time measurement info regarding the execution for kernel '{selected_kernel}' ("
                 + ('average, ' if args.samples > 1 else '') + "in milliseconds):")
         for timing_scope, time_elapsed in kernel_results.items():
             print(f'{timing_scope:>{indent}} - {time_elapsed}')

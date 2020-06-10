@@ -131,13 +131,15 @@ def profile_opencl_device(platform_id=0, device_id=0, verbose=False):
                 [clperf.HostToDeviceTransfer, clperf.DeviceToHostTransfer, clperf.DeviceToDeviceTransfer],
                 ['host-device', 'device-host', 'device-device']
             ):
+        tx_type_bw = tx_type_name + ' bandwidth'
+        device_profile[tx_type_bw] = {}
         for i in range(6, 31, 2):
             bs = 1 << i
             try:
                 bw = str(clperf.transfer_bandwidth(queue, tx_type, bs)/1e9) + ' GB/s'
             except Exception as e:
                 bw = 'exception: ' + e.__class__.__name__
-            device_profile[f'{tx_type_name} bandwidth @ {bs} bytes'] = bw
+            device_profile[tx_type_bw][f'{bs} bytes'] = bw
 
     return device_profile
 
@@ -320,7 +322,7 @@ def run_kernel(kernel_file_path, kernel_name,
             reduce(operator.add, map(Counter, map(lambda x : x['instcounts'], results)))
         )
         reduced_results['instcounts'] = {
-            k : v // (samples if samples > 0 else 1) for k, v in reduced_results['instcounts'].items()
+            k : int(v) // (samples if samples > 0 else 1) for k, v in reduced_results['instcounts'].items()
         }
         if samples > 1:
             interact('done', prompt=False)
