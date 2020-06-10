@@ -90,17 +90,17 @@ class OcludeInstrumentor(OpenCLCGenerator):
         '''
         idx points to an entry of self.function_instrumentation_data, which is
         a list of tuples (instr_idx, instr_cnt), and creates the AST representation of the command
-        "atomic_{add,sub}(&<hidden_local_counter>[instr_idx], instr_cnt);" for each tuple.
+        "atom_{add,sub}(&<hidden_local_counter>[instr_idx], instr_cnt);" for each tuple.
         Returns the list of these representations (i.e. AST nodes)
         '''
         instr = []
         for instr_name, instr_cnt in self.function_instrumentation_data[idx]:
 
             if instr_name.startswith('retNOT'):
-                atomic_func_name = 'atomic_sub'
+                atomic_func_name = 'atom_sub'
                 instr_index = str(llvm_instructions.index('ret'))
             else:
-                atomic_func_name = 'atomic_add'
+                atomic_func_name = 'atom_add'
                 instr_index = str(llvm_instructions.index(instr_name))
 
             instr.append(

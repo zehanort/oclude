@@ -113,7 +113,7 @@ def instrument_file(file, verbose):
         src = f.read()
     with open(file, 'w') as f:
         for line in src.splitlines():
-            if f'atomic_add(& {hidden_counter_name_local}' in line or f'atomic_sub(& {hidden_counter_name_local}' in line:
+            if f'atom_add(& {hidden_counter_name_local}' in line or f'atom_sub(& {hidden_counter_name_local}' in line:
                 instr_idx = int(line.split('[')[1].split(']')[0])
                 line += f' /* {llvm_instructions[instr_idx]} */'
             f.write(line + '\n')

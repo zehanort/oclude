@@ -171,7 +171,8 @@ def run_kernel(kernel_file_path, kernel_name,
 
     context = cl.Context([device])
     with open(kernel_file_path, 'r') as kernel_file:
-        program = cl.Program(context, kernel_file.read()).build()
+        kernel_source = '#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable\n' + kernel_file.read()
+    program = cl.Program(context, kernel_source).build()
 
     if timeit:
         queue = cl.CommandQueue(context, properties=cl.command_queue_properties.PROFILING_ENABLE)
