@@ -44,13 +44,15 @@ parser.add_argument('-l', '--lsize',
 parser.add_argument('-p', '--platform',
     type=int,
     help='the index of the OpenCL platform to use (default: 0)',
-    default=0
+    default=0,
+    dest='platform_id'
 )
 
 parser.add_argument('-d', '--device',
     type=int,
     help='the index of the OpenCL device to use (default: 0)',
-    default=0
+    default=0,
+    dest='device_id'
 )
 
 parser.add_argument('-s', '--samples',
@@ -98,7 +100,7 @@ parser.add_argument('--no-cache-warnings',
 
 def profile_opencl_kernel(file, kernel,
                           gsize, lsize,
-                          platform=0, device=0,
+                          platform_id=0, device_id=0,
                           samples=1,
                           instcounts=False, timeit=False,
                           verbose=False,
@@ -198,7 +200,7 @@ def profile_opencl_kernel(file, kernel,
     kernel_run_results = utils.run_kernel(
         instrumented_file, kernel,
         gsize, lsize,
-        platform, device,
+        platform_id, device_id,
         samples,
         instcounts, timeit,
         verbose
@@ -217,7 +219,7 @@ def run():
     args = parser.parse_args()
 
     if args.command == 'device':
-        device_prof_results = utils.profile_opencl_device(args.platform, args.device, args.verbose)
+        device_prof_results = utils.profile_opencl_device(args.platform_id, args.device_id, args.verbose)
         indent = max(len(profiling_category) for profiling_category in device_prof_results.keys())
         print('Profiling info for selected OpenCL device:')
         for profiling_category, profiling_info in device_prof_results.items():
