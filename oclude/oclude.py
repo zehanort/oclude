@@ -224,7 +224,7 @@ def run():
             if isinstance(profiling_info, dict):
                 for k, v in profiling_info.items():
                     category_name = f'{profiling_category} bandwidth @ {k}'
-                    print(f'{category_name0:>{indent}} - {v}')
+                    print(f'{category_name:>{indent}} - {v}')
             else:
                 print(f'{profiling_category:>{indent}} - {profiling_info}')
         exit(0)
