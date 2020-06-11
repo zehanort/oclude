@@ -12,7 +12,7 @@ Besides simply running the OpenCL kernel, `oclude` can also:
 ## Current Status
 
 The project is currently functional, with some limitations regarding mainly the complexity of the OpenCL C source code provided to it.
-More specifically, successful handling of OpenCL source files that are more complicated than the [rodinia benchmark suite](tests/rodinia_kernels) is **not** guaranteed.
+More specifically, successful handling of OpenCL source files that are more complicated than the [rodinia benchmark suite](https://github.com/zehanort/oclude/tree/master/tests/rodinia_kernels) is **not** guaranteed.
 
 ## System dependencies
 
@@ -30,6 +30,12 @@ In case you want to use `oclude` as an OpenCL kernel profiler (i.e. get LLVM ins
 - The `clang` compiler (tested with version `10.0.0` that was installed along with `LLVM`)
 - `g++` with `C++17` (or later) support
 - `LLVM` (tested with version `10.0.0git`. You can check your version by running `llvm-config --version` in a terminal. Tested with version `3.8` and did **not** work, so my guess is that you will need something quite higher than that)
+- Note: If the OpenCL kernels that you want to profile are very complex and/or large -meaning a (really) high count of instructions-, the selected OpenCL device should support the `cl_khr_int64_base_atomics` OpenCL extension. If not, `oclude` (and, more specifically, the `hostcode` component) will warn you with the following error:
+```
+[hostcode] WARNING: Selected device does not support the `cl_khr_int64_base_atomics` OpenCL extension!
+[hostcode]          This means that instructions will not get correctly reported if they are too many!
+```
+Be aware that, if this extension is not supported by the selected OpenCL device, it is **not** guaranteed that the instructions reported for complex and/or large OpenCL kernels will be truthful.
 
 ## Installation
 
