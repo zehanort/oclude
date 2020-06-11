@@ -82,7 +82,7 @@ class CachedFiles:
             # firstly, get the kernel list
 
             # remove instrumentation comments
-            cmdout = sp.run([self.commentRemover, cached_file], stdout=sp.PIPE, stderr=sp.PIPE)
+            cmdout = sp.run([self.commentRemover, filename], stdout=sp.PIPE, stderr=sp.PIPE)
             cmdout = cmdout.stdout.decode('ascii')
 
             src = ''.join(filter(lambda line : line.strip() and not line.startswith('#'), cmdout.splitlines(keepends=True)))

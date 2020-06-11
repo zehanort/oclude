@@ -75,11 +75,14 @@ def handle_test_files():
 
     yield ### run test ###
 
-    shutil.rmtree(tmptestdir1)
-    shutil.rmtree(tmptestdir2)
-    os.remove(os.path.join(testdir, os.path.join(cachedir, 'instr_same_name.cl')))
-    os.remove(os.path.join(testdir, os.path.join(cachedir, 'same_name.cl.digest')))
-    os.remove(os.path.join(testdir, os.path.join(cachedir, 'same_name.cl.kernels')))
+    try:
+        shutil.rmtree(tmptestdir1)
+        shutil.rmtree(tmptestdir2)
+        os.remove(os.path.join(testdir, os.path.join(cachedir, 'instr_same_name.cl')))
+        os.remove(os.path.join(testdir, os.path.join(cachedir, 'same_name.cl.digest')))
+        os.remove(os.path.join(testdir, os.path.join(cachedir, 'same_name.cl.kernels')))
+    except:
+        pass
 
 def test_kernel_files_same_name():
 
@@ -96,7 +99,7 @@ def test_kernel_files_same_name():
     assert retcode2 == 0
     assert error2.splitlines()[0].strip().endswith('is not cached')
 
-def test_same_kernel_file_twice():
+def test_same_kernel_file_twice_no_instcounts():
 
     # run first kernel
     _, error1, retcode1 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
@@ -104,6 +107,21 @@ def test_same_kernel_file_twice():
     # run first kernel again!
     _, error2, retcode2 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
 
+    # should not have been cached
+    assert retcode1 == 0
+    assert error1.splitlines()[0].strip().endswith('is not cached')
+    assert retcode2 == 0
+    assert error2.splitlines()[0].strip().endswith('is not cached')
+
+def test_same_kernel_file_twice_instcounts():
+
+    # run first kernel
+    _, error1, retcode1 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd -i")
+
+    # run first kernel again!
+    _, error2, retcode2 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd -i")
+
+    # should have been cached
     assert retcode1 == 0
     assert error1.splitlines()[0].strip().endswith('is not cached')
     assert retcode2 == 0
@@ -112,13 +130,13 @@ def test_same_kernel_file_twice():
 def test_clear_cache_flag():
 
     # dummy kernel to ensure caching
-    _, _, retcode1 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
+    _, _, retcode1 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd -i")
 
     # dummy kernel again to see that now it is cached
-    _, error2, retcode2 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
+    _, error2, retcode2 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd -i")
 
     # dummy kernel again once more to see that it is not cached after clearing
-    _, error3, retcode3 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd --clear-cache")
+    _, error3, retcode3 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd -i --clear-cache")
     [error3_first_line, error3_second_line] = error3.splitlines()[0:2]
 
     assert retcode1 == 0
@@ -131,13 +149,13 @@ def test_clear_cache_flag():
 def test_ignore_cache_flag():
 
     # dummy kernel to ensure caching
-    _, _, retcode1 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
+    _, _, retcode1 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd -i")
 
     # dummy kernel again to see that now it is cached
-    _, error2, retcode2 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd")
+    _, error2, retcode2 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd -i")
 
     # dummy kernel again once more to see that now we ignore cache
-    _, error3, retcode3 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd --ignore-cache")
+    _, error3, retcode3 = run_command(f"oclude -f {kernel1} -g {GSIZE} -l {LSIZE} -k vadd -i --ignore-cache")
 
     assert retcode1 == 0
     assert retcode2 == 0

@@ -163,8 +163,6 @@ def profile_opencl_kernel(file, kernel,
             utils.instrument_file(instrumented_file, verbose)
     else:
         instrumented_file = file
-        if not is_cached:
-            cache.copy_file_to_cache(instrumented_file)
 
     # step 1.2
     file_kernels = cache.get_file_kernels(file)
