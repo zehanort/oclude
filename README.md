@@ -57,90 +57,169 @@ pip install -e .
 ```
 in case you would like to experiment with the `oclude` code.
 
-## Modes of operation
+## Usage
 
-\* *The modes of operation will be presented using the `CLI` of `oclude`. For its Python 3 module usage, see next section.*
+Everything you need to know about the different ways in which `oclude` can be used, including a full documentation of all the APIs it exports, is located in the [wiki](https://github.com/zehanort/oclude/wiki). The examples in the following sections are using the `oclude` CLI.
 
-\*\* *WARNING: This section is **DEPRECATED**; will be updated ASAP*
+As a brief overview, `oclude` supports 2 different **commands**:
+- the profiling of the selected **device**, and
+- the execution and/or profiling of an OpenCL **kernel**.
 
-`oclude` can be used to simply run an OpenCL kernel, with nothing else actually happening. Explaining the usage below (you can see all flags with `oclude -h`)
-- Firstly, an OpenCL kernel file (\*.cl) must be specified
-- A kernel from inside this file is chosen with `-k` (optional; if it is not used, `oclude` will inform the user of the kernels present in the input file and they will be able to choose which one to run interactively)
-- Specify the OpenCL NDRange with `-s` and the number of work groups with `-w`
-
-```
-$ oclude tests/dwt2d/com_dwt.cl -k c_CopySrcToComponents -s 1024 -w 8
-[oclude] INFO: Input file tests/dwt2d/com_dwt.cl is cached
-[oclude] Running kernel c_CopySrcToComponents from file tests/dwt2d/com_dwt.cl
-[hostcode-wrapper] Using platform: Intel(R) OpenCL HD Graphics
-[hostcode-wrapper] Using device: Intel(R) Gen9 HD Graphics NEO (device OpenCL version: OpenCL 2.1 NEO )
-[hostcode-wrapper] Kernel name: c_CopySrcToComponents
-[hostcode-wrapper] Kernel arg 0: d_r (int*, global)
-[hostcode-wrapper] Kernel arg 1: d_g (int*, global)
-[hostcode-wrapper] Kernel arg 2: d_b (int*, global)
-[hostcode-wrapper] Kernel arg 3: cl_d_src (uchar*, global)
-[hostcode-wrapper] Kernel arg 4: pixels (int, private)
-[hostcode-wrapper] Enqueuing kernel with Global NDRange = 1024 and Local NDRange = 128
-[oclude] Kernel run completed successfully
-```
-
-Nothing interesting happened though... That is why `oclude` has 2 modes of operation:
-
-### Mode 1: Execution time measurement
-
-Simply use the flag `--time-it` or `-t` to measure the execution time of the specified kernel:
+The latter supports 2 different **modes of operation**, apart from simply executing the kernel:
+- count **the LLVM instructions that were executed**, codenamed **instcounts**, and/or
+- measure the **execution time**, codenamed **timeit**:
 
 ```
-$ oclude tests/dwt2d/com_dwt.cl -k c_CopySrcToComponents -s 1024 -w 8 -t
-[oclude] INFO: Input file tests/dwt2d/com_dwt.cl is cached
-[oclude] Running kernel c_CopySrcToComponents from file tests/dwt2d/com_dwt.cl
-[hostcode-wrapper] Using platform: Intel(R) OpenCL HD Graphics
-[hostcode-wrapper] Using device: Intel(R) Gen9 HD Graphics NEO (device OpenCL version: OpenCL 2.1 NEO )
-[hostcode-wrapper] Kernel name: c_CopySrcToComponents
-[hostcode-wrapper] Kernel arg 0: d_r (int*, global)
-[hostcode-wrapper] Kernel arg 1: d_g (int*, global)
-[hostcode-wrapper] Kernel arg 2: d_b (int*, global)
-[hostcode-wrapper] Kernel arg 3: cl_d_src (uchar*, global)
-[hostcode-wrapper] Kernel arg 4: pixels (int, private)
-[hostcode-wrapper] Enqueuing kernel with Global NDRange = 1024 and Local NDRange = 128
-[oclude] Kernel run completed successfully
-Execution time for kernel 'c_CopySrcToComponents':
-ns: 8083.0
-ms: 0.008083
+oclude
+  ├── device
+  └── kernel
+        ├── instcounts
+        └── timeit
 ```
 
-### Mode 2: Intstruction count
+In the `oclude` CLI, the syntax is the following:
+```
+$ oclude <command> <command flags>
+```
+Note that `command` is optional and defaults to `kernel`.
 
-Simply use the flag `--inst-counts` or `-i` to instrument the kernel and count the LLVM instructions that correspond to the instructions that were actually ran by the kernel:
+### The `device` command
+
+An example of the `device` command in the `oclude` CLI could be the following:
+```
+$ oclude device -p 0 -d 0
+[hostcode] Collecting profiling info for the following device:
+[hostcode] Platform:	Intel(R) OpenCL HD Graphics
+[hostcode] Device:	Intel(R) Gen9 HD Graphics NEO
+[hostcode] Version:	OpenCL 2.1 NEO
+[hostcode] Please wait, this may take a while...
+Profiling info for selected OpenCL device:
+        profiling overhead (time) - 0.011303499341011047
+  profiling overhead (percentage) - 17.80%
+                  command latency - 0.06351426243782043
+  host-to-device transfer latency - 0.011074915528297424
+  device-to-host transfer latency - 0.011512413620948792
+device-to-device transfer latency - 0.06323426961898804
+host-device bandwidth bandwidth @ 64 bytes - 0.005645181903735443 GB/s
+host-device bandwidth bandwidth @ 256 bytes - 0.022125035974706695 GB/s
+host-device bandwidth bandwidth @ 1024 bytes - 0.08657326467722175 GB/s
+... a lot of bandwidth measurements follow ...
+```
+
+### The `kernel` command
+
+An example of the `kernel` command in the `oclude` CLI could be the following (note that the `kernel` keyword is omitted as it is implied when absent and that, besides running the kernel, nothing else really happens):
 
 ```
-$ oclude tests/dwt2d/com_dwt.cl -k c_CopySrcToComponents -s 1024 -w 8 -i
-[oclude] INFO: Input file tests/dwt2d/com_dwt.cl is cached
-[oclude] INFO: Using cached instrumented file
-[oclude] Running kernel c_CopySrcToComponents from file tests/dwt2d/com_dwt.cl
-[hostcode-wrapper] Using platform: Intel(R) OpenCL HD Graphics
-[hostcode-wrapper] Using device: Intel(R) Gen9 HD Graphics NEO (device OpenCL version: OpenCL 2.1 NEO )
-[hostcode-wrapper] Kernel name: c_CopySrcToComponents
-[hostcode-wrapper] Kernel arg 0: d_r (int*, global)
-[hostcode-wrapper] Kernel arg 1: d_g (int*, global)
-[hostcode-wrapper] Kernel arg 2: d_b (int*, global)
-[hostcode-wrapper] Kernel arg 3: cl_d_src (uchar*, global)
-[hostcode-wrapper] Kernel arg 4: pixels (int, private)
-[hostcode-wrapper] Enqueuing kernel with Global NDRange = 1024 and Local NDRange = 128
-[oclude] Kernel run completed successfully
+$ oclude -f tests/rodinia_kernels/dwt2d/com_dwt.cl -k c_CopySrcToComponents -g 1024 -l 128
+[oclude] INFO: Input file tests/rodinia_kernels/dwt2d/com_dwt.cl is not cached
+[oclude] Running kernel 'c_CopySrcToComponents' from file tests/rodinia_kernels/dwt2d/com_dwt.cl
+[hostcode] Using the following device:
+[hostcode] Platform:    Intel(R) OpenCL HD Graphics
+[hostcode] Device:      Intel(R) Gen9 HD Graphics NEO
+[hostcode] Version:     OpenCL 2.1 NEO
+[hostcode] Kernel name: c_CopySrcToComponents
+[hostcode] Kernel arg 1: d_r (int*, global)
+[hostcode] Kernel arg 2: d_g (int*, global)
+[hostcode] Kernel arg 3: d_b (int*, global)
+[hostcode] Kernel arg 4: cl_d_src (uchar*, global)
+[hostcode] Kernel arg 5: pixels (int, private)
+[hostcode] About to execute kernel with Global NDRange = 1024 and Local NDRange = 128
+[hostcode] Number of executions (a.k.a. samples) to perform: 1
+[hostcode] Kernel run completed successfully
+```
+
+Observe the following from the usage above:
+
+- Firstly, an OpenCL kernel file (\*.cl) is specified with the `--file/-f` flag
+- A kernel from inside this file is chosen with `--kernel/-k` (optional; if it is not used, `oclude` will inform the user of the kernels present in the input file and they will be able to choose which one to run interactively)
+- The global and local OpenCL NDRanges are specified with the `--gsize/-g` and `--lsize/-l` flags, respectively. Only 1 dimension is supported, therefore these flags accept only a single positive integer.
+
+Nothing interesting happened though... That is why the `kernel` command has 2 modes of operation.
+
+#### Mode 1: Intstruction count
+
+Simply use the `--inst-counts\-i` flag to instrument the kernel and count the LLVM instructions that correspond to the instructions that were actually ran by the kernel:
+
+```
+$ oclude -f tests/rodinia_kernels/dwt2d/com_dwt.cl -k c_CopySrcToComponents -g 1024 -l 128 -i
+[oclude] INFO: Input file tests/rodinia_kernels/dwt2d/com_dwt.cl is not cached
+[oclude] Instrumenting source file
+[instrumentation] Preprocessing source file
+[instrumentation] Compiling source to LLVM bitcode (1/2)
+[instrumentation] Retrieving instrumentation data from LLVM bitcode
+[instrumentation] Compiling source to LLVM bitcode (2/2)
+[instrumentation] Intrumentation completed successfully
+[oclude] Running kernel 'c_CopySrcToComponents' from file tests/rodinia_kernels/dwt2d/com_dwt.cl
+[hostcode] Using the following device:
+[hostcode] Platform:	Intel(R) OpenCL HD Graphics
+[hostcode] Device:	Intel(R) Gen9 HD Graphics NEO
+[hostcode] Version:	OpenCL 2.1 NEO
+[hostcode] Kernel name: c_CopySrcToComponents
+[hostcode] Kernel arg 1: d_r (int*, global)
+[hostcode] Kernel arg 2: d_g (int*, global)
+[hostcode] Kernel arg 3: d_b (int*, global)
+[hostcode] Kernel arg 4: cl_d_src (uchar*, global)
+[hostcode] Kernel arg 5: pixels (int, private)
+[hostcode] About to execute kernel with Global NDRange = 1024 and Local NDRange = 128
+[hostcode] Number of executions (a.k.a. samples) to perform: 1
+[hostcode] Collecting instruction counts...
+[hostcode] Kernel run completed successfully
 Instructions executed for kernel 'c_CopySrcToComponents':
-            6144 - add
-            6144 - getelementptr
-            6144 - sext
+           29136 - load private
+           17408 - store private
+           16848 - alloca
+           12288 - add
+           11264 - mul
+           10158 - getelementptr
+           10158 - sext
             4096 - call
-            3072 - mul
-            3072 - load private
-            3072 - load global
-            3072 - store private
+            3454 - store callee
             3072 - zext
-            2048 - br
+            2826 - load callee
             2048 - trunc
+            1338 - br
+            1024 - ret
             1024 - icmp
+             942 - sub
 ```
 
 NOTE: The output of this mode was designed to resemble that of [Oclgrind](https://github.com/jrprice/Oclgrind).
+
+#### Mode 2: Execution time measurement
+
+Simply use the `--time-it\-t` flag to measure the execution time of the specified kernel:
+
+```
+$ oclude -f tests/rodinia_kernels/dwt2d/com_dwt.cl -k c_CopySrcToComponents -g 1024 -l 128 -t
+[oclude] INFO: Input file tests/rodinia_kernels/dwt2d/com_dwt.cl is not cached
+[oclude] Running kernel 'c_CopySrcToComponents' from file tests/rodinia_kernels/dwt2d/com_dwt.cl
+[hostcode] Using the following device:
+[hostcode] Platform:	Intel(R) OpenCL HD Graphics
+[hostcode] Device:	Intel(R) Gen9 HD Graphics NEO
+[hostcode] Version:	OpenCL 2.1 NEO
+[hostcode] Kernel name: c_CopySrcToComponents
+[hostcode] Kernel arg 1: d_r (int*, global)
+[hostcode] Kernel arg 2: d_g (int*, global)
+[hostcode] Kernel arg 3: d_b (int*, global)
+[hostcode] Kernel arg 4: cl_d_src (uchar*, global)
+[hostcode] Kernel arg 5: pixels (int, private)
+[hostcode] About to execute kernel with Global NDRange = 1024 and Local NDRange = 128
+[hostcode] Number of executions (a.k.a. samples) to perform: 1
+[hostcode] Collecting time profiling info...
+[hostcode] Kernel run completed successfully
+Time measurement info regarding the execution for kernel 'c_CopySrcToComponents' (in milliseconds):
+hostcode - 1.9354820251464844
+  device - 0.013415999999999999
+transfer - 1.9220660251464843
+```
+
+The 2 modes of the `kernel` command can be combined to measure the execution time of the instrumented OpenCL code.
+
+## Usage (as a Python module)
+
+`oclude` exports its 2 commands -`device` and `kernel`- as 2 different functions:
+- the `device` command is exported as the `oclude.profile_opencl_device()` function
+- the `kernel` command is exported as the `oclude.profile_opencl_kernel()` function
+
+Their complete documentation can be found in the [wiki](https://github.com/zehanort/oclude/wiki).
