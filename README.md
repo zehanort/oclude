@@ -46,7 +46,7 @@ Be aware that, if this extension is not supported by the selected OpenCL device,
 git clone git@github.com:zehanort/oclude.git
 cd oclude
 ```
-2. (optional) If you need to use `oclude` as a full OpenCL kernel profiler (i.e. count `LLVM` instructions executed), you will need to build a `C++` component of `oclude`. Simply run `make` in the directory you are currently at. If any errors occur, your `g++` and/or `LLVM` versions are not compatible with `oclude`. Ignore this step; you want be able to use `oclude` as a full OpenCL kernel profiler (unless you change your `g++` and/or `LLVM` versions, obviously)
+2. (optional) If you need to use `oclude` as a full OpenCL kernel profiler (i.e. count `LLVM` instructions executed), you will need to build a `C++` component of `oclude`. Simply run `make` in the directory you are currently at. If any errors occur, your `g++` and/or `LLVM` versions are not compatible with `oclude`. Ignore this step; you will **not** be able to use `oclude` as a full OpenCL kernel profiler (unless you change your `g++` and/or `LLVM` versions, obviously)
 3. Install `oclude` on your system or inside a virtual environment (e.g. using `venv`). From the directory you are currently at, run:
 ```
 pip install .
