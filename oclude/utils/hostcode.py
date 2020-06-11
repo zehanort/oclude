@@ -340,7 +340,7 @@ def run_kernel(kernel_file_path, kernel_name,
             reduce(operator.add, map(Counter, map(lambda x : x['timeit'], results)))
         )
         reduced_results['timeit'] = {
-            k : v // (samples if samples > 0 else 1) for k, v in reduced_results['timeit'].items()
+            k : v / (samples if samples > 0 else 1) for k, v in reduced_results['timeit'].items()
         }
         if samples > 1:
             interact('done', prompt=False)
