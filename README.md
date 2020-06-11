@@ -223,3 +223,11 @@ The 2 modes of the `kernel` command can be combined to measure the execution tim
 - the `kernel` command is exported as the `oclude.profile_opencl_kernel()` function
 
 Their complete documentation can be found in the [wiki](https://github.com/zehanort/oclude/wiki).
+
+## Limitations & known issues
+
+1. For the time being, `oclude` instruments the OpenCL source code directly in order to count the LLVM instructions that are executed. To achieve that, a mapping between the OpenCL C source code and the LLVM bitcode [basic blocks](https://en.wikipedia.org/wiki/Basic_block) has been designed. As you may know, a 1-1 mapping between source code and basic blocks of an [IR](https://en.wikipedia.org/wiki/Intermediate_representation) is not a trivial problem, which means that many design choices had to be made. For this mapping to be properly designed, *no optimizations could be used during the parsing of the LLVM instructions to which the input source file is compiled*. This means that the instruction counts that are reported when using the `kernel` command with the `--instcounts\-i` mode of operation corresponds to the unoptimized OpenCL source code.
+2. If there are certain sizes and/or values of the input arguments that may lead the specified kernel to a segfault, there are 3 different possible outcomes:
+    - normal execution
+    - empty output
+    - execution of `oclude` hangs and you have to kill it manually
