@@ -160,9 +160,14 @@ def run_kernel(kernel_file_path, kernel_name,
 
     ### step 1: get OpenCL platform, device and context, ###
     ### build the kernel program and create a queue      ###
-    # TODO: some OpenCL-related checks
     platform = cl.get_platforms()[platform_id]
     device = platform.get_devices()[device_id]
+
+    # check if the extension needed
+    # for the ulong hidden counters exists in selected device
+    if instcounts and 'cl_khr_int64_base_atomics' not in device.get_info(cl.device_info.EXTENSIONS):
+        interact('WARNING: Selected device does not support the `cl_khr_int64_base_atomics` OpenCL extension!')
+        interact('         This means that instructions will not get correctly reported if they are too many!')
 
     interact('Using the following device:')
     interact('Platform:\t' + platform.name)
