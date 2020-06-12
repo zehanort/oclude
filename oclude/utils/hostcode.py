@@ -18,9 +18,6 @@ from rvg import NumPyRVG
 import numpy as np
 import os
 from tqdm import trange
-from functools import reduce
-from collections import Counter
-import operator
 from time import time
 
 oclude_buffer_length = len(llvm_instructions)
@@ -291,7 +288,7 @@ def run_kernel(kernel_file_path, kernel_name,
         queue.finish()
 
         ### step 6: read back the results and report them if requested
-        results.append({})
+        this_run_results = {}
 
         if instcounts:
             if not samples > 1:
@@ -302,47 +299,23 @@ def run_kernel(kernel_file_path, kernel_name,
             final_counter = [0 for _ in range(oclude_buffer_length)]
             for i in range(oclude_buffer_length):
                 for j in range(gsize // lsize):
-                    final_counter[i] += global_counter[i + j * oclude_buffer_length]
-            results[-1]['instcounts'] = dict(zip(llvm_instructions, final_counter))
+                    final_counter[i] += global_counter[i + j * oclude_buffer_length].item()
+            this_run_results['instcounts'] = dict(zip(llvm_instructions, final_counter))
 
         if timeit:
             if not samples > 1:
                 interact('Collecting time profiling info...')
             hostcode_time_elapsed = (time_finish - time_start) * 1000
             device_time_elapsed = (event.profile.end - event.profile.start) * 1e-6
-            results[-1]['timeit'] = {
+            this_run_results['timeit'] = {
                 'hostcode': hostcode_time_elapsed,
-                'device': device_time_elapsed,
+                'device':   device_time_elapsed,
                 'transfer': hostcode_time_elapsed - device_time_elapsed
             }
 
+        if this_run_results:
+            results.append(this_run_results)
+
     interact('Kernel run' + ('s' if samples > 1 else '') + ' completed successfully')
 
-    # reduce all runs to a single dict of results
-    reduced_results = {}
-
-    if instcounts:
-        if samples > 1:
-            interact(f'Calculating average instruction counts over {samples} samples... ', nl=False)
-        reduced_results['instcounts'] = dict(
-            reduce(operator.add, map(Counter, map(lambda x : x['instcounts'], results)))
-        )
-        reduced_results['instcounts'] = {
-            k : int(v) // (samples if samples > 0 else 1) for k, v in reduced_results['instcounts'].items()
-        }
-        if samples > 1:
-            interact('done', prompt=False)
-
-    if timeit:
-        if samples > 1:
-            interact(f'Calculating average time profiling info over {samples} samples... ', nl=False)
-        reduced_results['timeit'] = dict(
-            reduce(operator.add, map(Counter, map(lambda x : x['timeit'], results)))
-        )
-        reduced_results['timeit'] = {
-            k : v / (samples if samples > 0 else 1) for k, v in reduced_results['timeit'].items()
-        }
-        if samples > 1:
-            interact('done', prompt=False)
-
-    return reduced_results
+    return results if results else None

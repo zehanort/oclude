@@ -1,5 +1,9 @@
 import argparse
 import os
+from functools import reduce
+from collections import Counter
+import operator
+
 import oclude.utils as utils
 
 # define the arguments of oclude
@@ -203,11 +207,12 @@ def profile_opencl_kernel(file, kernel,
         instcounts, timeit,
         verbose
     )
-    kernel_run_results['original file'] = file
-    kernel_run_results['instrumented file'] = instrumented_file if instrumented_file != file else None
-    kernel_run_results['kernel'] = kernel
-
-    return kernel_run_results
+    return {
+        'original file':     file,
+        'instrumented file': instrumented_file if instrumented_file != file else None,
+        'kernel':            kernel,
+        'results':           kernel_run_results
+    }
 
 ###############################
 ### MAIN FUNCTION OF OCLUDE ###
@@ -215,6 +220,9 @@ def profile_opencl_kernel(file, kernel,
 def run():
 
     args = parser.parse_args()
+
+    interact = utils.Interactor(__file__.split(os.sep)[-1])
+    interact.set_verbosity(args.verbose)
 
     if args.command == 'device':
         device_prof_results = utils.profile_opencl_device(args.platform_id, args.device_id, args.verbose)
@@ -234,7 +242,40 @@ def run():
     results = profile_opencl_kernel(**args_dict)
 
     ### STEP 3: dump an oclgrind-like output (if requested by user) ###
+
+    # reduce all runs to a single dict of results
     selected_kernel = results['kernel']
+    results = results['results']
+    reduced_results = {}
+    samples = args.samples
+
+    if args.instcounts:
+        if samples > 1:
+            interact(f'Calculating average instruction counts over {samples} samples... ', nl=False)
+        reduced_results['instcounts'] = dict(
+            reduce(operator.add, map(Counter, map(lambda x : x['instcounts'], results)))
+        )
+        reduced_results['instcounts'] = {
+            k : int(v) // (samples if samples > 0 else 1) for k, v in reduced_results['instcounts'].items()
+        }
+        if samples > 1:
+            interact('done', prompt=False)
+
+    if args.timeit:
+        if samples > 1:
+            interact(f'Calculating average time profiling info over {samples} samples... ', nl=False)
+        reduced_results['timeit'] = dict(
+            reduce(operator.add, map(Counter, map(lambda x : x['timeit'], results)))
+        )
+        reduced_results['timeit'] = {
+            k : v / (samples if samples > 0 else 1) for k, v in reduced_results['timeit'].items()
+        }
+        if samples > 1:
+            interact('done', prompt=False)
+
+    # in the CLI of oclude, we only need the average of the samples
+    results = reduced_results
+
     if args.instcounts:
         print(f"Instructions executed for kernel '{selected_kernel}'" + (' (average):' if args.samples > 1 else ':'))
         for instname, instcount in sorted(results['instcounts'].items(), key=lambda item : item[1], reverse=True):
