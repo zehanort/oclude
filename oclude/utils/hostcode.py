@@ -72,7 +72,7 @@ def init_kernel_arguments(context, args, arg_types, gsize, lsize):
             continue
         if argname == hidden_counter_name_global:
             which_are_scalar.append(None)
-            hidden_global_hostbuf = np.zeros(oclude_buffer_length * (gsize // lsize), dtype=argtype)
+            hidden_global_hostbuf = np.zeros(oclude_buffer_length, dtype=argtype)
             hidden_global_buf = cl.Buffer(context, mem_flags, hostbuf=hidden_global_hostbuf)
             arg_bufs.append(hidden_global_buf)
             continue
@@ -295,12 +295,7 @@ def run_kernel(kernel_file_path, kernel_name,
                 interact('Collecting instruction counts...')
             global_counter = np.empty_like(hidden_global_hostbuf)
             cl.enqueue_copy(queue, global_counter, hidden_global_buf)
-
-            final_counter = [0 for _ in range(oclude_buffer_length)]
-            for i in range(oclude_buffer_length):
-                for j in range(gsize // lsize):
-                    final_counter[i] += global_counter[i + j * oclude_buffer_length].item()
-            this_run_results['instcounts'] = dict(zip(llvm_instructions, final_counter))
+            this_run_results['instcounts'] = dict(zip(llvm_instructions, global_counter.tolist()))
 
         if timeit:
             if not samples > 1:

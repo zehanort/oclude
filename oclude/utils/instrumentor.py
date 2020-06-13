@@ -26,7 +26,8 @@ class OcludeInstrumentor(OpenCLCGenerator):
 
         self.kernelFuncs = kernelFuncs
 
-        # this is the prologue of the instrumentation of every kernel in OpenCL:
+        # this is the prologue of the instrumentation of every kernel in OpenCL
+        # (initialization of the local hidden counter to zero):
         #
         # if (get_local_id(0) == 0)
         #     for (int i = 0; i < <len(llvm_instructions)>; i++)
@@ -50,13 +51,13 @@ class OcludeInstrumentor(OpenCLCGenerator):
             FuncCall(name=ID('barrier'), args=ExprList(exprs=[ID('CLK_GLOBAL_MEM_FENCE')]))
         ]
 
-        # this is the epilogue of the instrumentation of every kernel in OpenCL:
+        # this is the epilogue of the instrumentation of every kernel in OpenCL
+        # (add the group statistics to the global hidden counter):
         #
         # barrier(CLK_GLOBAL_MEM_FENCE);
-        # if (get_local_id(0) == 0) {{
-        #     int glid = get_group_id(0) * <len(llvm_instructions)>;
-        #     for (int i = glid; i < glid + <len(llvm_instructions)>; i++)
-        #         <hidden_counter_name_global>[i] = <hidden_counter_name_local>[i - glid];
+        # if (get_local_id(0) == 0)
+        #     for (int i = 0; i < <len(llvm_instructions)>; i++)
+        #         atom_add(&hidden_counter_name_global>[i], <hidden_counter_name_local>[i]);
         #
         # and this is its AST:
         self.epilogue = [
@@ -65,24 +66,17 @@ class OcludeInstrumentor(OpenCLCGenerator):
                              left=FuncCall(name=ID('get_local_id'),
                                            args=ExprList(exprs=[Constant(type='int', value='0')])),
                              right=Constant(type='int', value='0')),
-               iftrue=Compound([
-                            Decl(name='glid', quals=[], storage=[], funcspec=[],
-                                 type=TypeDecl(declname='glid', quals=[], type=IdentifierType(names=['int'])),
-                                 init=BinaryOp(op='*', left=FuncCall(name=ID('get_group_id'),
-                                               args=ExprList(exprs=[Constant(type='int', value='0')])),
-                                               right=Constant(type='int', value=str(len(llvm_instructions)))),
-                                 bitsize=None),
-                            For(init=DeclList(decls=[Decl(name='i', quals=[], storage=[], funcspec=[],
-                                              type=TypeDecl(declname='i', quals=[], type=IdentifierType(names=['int'])),
-                                              init=ID('glid'), bitsize=None)]),
-                                cond=BinaryOp(op='<', left=ID('i'),
-                                              right=BinaryOp(op='+', left=ID('glid'),
-                                                             right=Constant(type='int', value=str(len(llvm_instructions))))),
-                                next=UnaryOp(op='p++', expr=ID('i')),
-                                stmt=Assignment(op='=', lvalue=ArrayRef(name=ID(hidden_counter_name_global), subscript=ID('i')),
-                                                rvalue=ArrayRef(name=ID(hidden_counter_name_local),
-                                                subscript=BinaryOp(op='-', left=ID('i'), right=ID('glid')))))
-                               ]),
+               iftrue=For(init=DeclList(decls=[Decl(name='i', quals=[], storage=[], funcspec=[],
+                                        type=TypeDecl(declname='i', quals=[], type=IdentifierType(names=['int'])),
+                                        init=Constant(type='int', value='0'), bitsize=None)]),
+                          cond=BinaryOp(op='<', left=ID('i'), right=Constant(type='int', value=str(len(llvm_instructions)))),
+                          next=UnaryOp(op='p++', expr=ID('i')),
+                          stmt=FuncCall(name=ID('atom_add'),
+                                        args=ExprList(exprs=[
+                                                        UnaryOp(op='&', expr=ArrayRef(name=ID(hidden_counter_name_global),
+                                                                 subscript=ID('i'))),
+                                                        ArrayRef(name=ID(hidden_counter_name_local),
+                                                                 subscript=ID('i'))]))),
                iffalse=None)
         ]
 
