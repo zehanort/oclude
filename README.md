@@ -139,7 +139,7 @@ Nothing interesting happened though... That is why the `kernel` command has 2 mo
 
 #### Mode 1: Intstruction count
 
-Simply use the `--inst-counts\-i` flag to instrument the kernel and count the LLVM instructions that correspond to the instructions that were actually ran by the kernel:
+Simply use the `--inst-counts/-i` flag to instrument the kernel and count the LLVM instructions that correspond to the instructions that were actually ran by the kernel:
 
 ```
 $ oclude -f tests/rodinia_kernels/dwt2d/com_dwt.cl -k c_CopySrcToComponents -g 1024 -l 128 -i
@@ -188,7 +188,7 @@ NOTE: The output of this mode was designed to resemble that of [Oclgrind](https:
 
 #### Mode 2: Execution time measurement
 
-Simply use the `--time-it\-t` flag to measure the execution time of the specified kernel:
+Simply use the `--time-it/-t` flag to measure the execution time of the specified kernel:
 
 ```
 $ oclude -f tests/rodinia_kernels/dwt2d/com_dwt.cl -k c_CopySrcToComponents -g 1024 -l 128 -t
@@ -226,7 +226,7 @@ Their complete documentation can be found in the respective [wiki page](https://
 
 ## Limitations & known issues
 
-1. For the time being, `oclude` instruments the OpenCL source code directly in order to count the LLVM instructions that are executed. To achieve that, a mapping between the OpenCL C source code and the LLVM bitcode [basic blocks](https://en.wikipedia.org/wiki/Basic_block) has been designed. As you may know, a 1-1 mapping between source code and basic blocks of an [IR](https://en.wikipedia.org/wiki/Intermediate_representation) is not a trivial problem, which means that many design choices had to be made. For this mapping to be properly designed, *no optimizations could be used during the parsing of the LLVM instructions to which the input source file is compiled*. This means that the instruction counts that are reported when using the `kernel` command with the `--instcounts\-i` mode of operation corresponds to the unoptimized OpenCL source code.
+1. For the time being, `oclude` instruments the OpenCL source code directly in order to count the LLVM instructions that are executed. To achieve that, a mapping between the OpenCL C source code and the LLVM bitcode [basic blocks](https://en.wikipedia.org/wiki/Basic_block) has been designed. As you may know, a 1-1 mapping between source code and basic blocks of an [IR](https://en.wikipedia.org/wiki/Intermediate_representation) is not a trivial problem, which means that many design choices had to be made. For this mapping to be properly designed, *no optimizations could be used during the parsing of the LLVM instructions to which the input source file is compiled*. This means that the instruction counts that are reported when using the `kernel` command with the `--instcounts/-i` mode of operation corresponds to the unoptimized OpenCL source code.
 2. If there are certain sizes and/or values of the input arguments that may lead the specified kernel to a segfault, there are 3 different possible outcomes:
     - normal execution
     - empty output
