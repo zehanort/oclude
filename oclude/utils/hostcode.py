@@ -20,8 +20,6 @@ import os
 from tqdm import trange
 from time import time
 
-oclude_buffer_length = len(llvm_instructions)
-
 def create_struct_type(device, struct_name, struct):
 
     def create_array_type(name, decl):
@@ -68,11 +66,11 @@ def init_kernel_arguments(context, args, arg_types, gsize, lsize):
         # special handling of oclude hidden buffers
         if argname == hidden_counter_name_local:
             which_are_scalar.append(None)
-            arg_bufs.append(cl.LocalMemory(oclude_buffer_length * argtype(0).itemsize))
+            arg_bufs.append(cl.LocalMemory(len(llvm_instructions) * argtype(0).itemsize))
             continue
         if argname == hidden_counter_name_global:
             which_are_scalar.append(None)
-            hidden_global_hostbuf = np.zeros(oclude_buffer_length, dtype=argtype)
+            hidden_global_hostbuf = np.zeros(len(llvm_instructions), dtype=argtype)
             hidden_global_buf = cl.Buffer(context, mem_flags, hostbuf=hidden_global_hostbuf)
             arg_bufs.append(hidden_global_buf)
             continue
