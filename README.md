@@ -222,7 +222,7 @@ The 2 modes of the `kernel` command can be combined to measure the execution tim
 - the `device` command is exported as the `oclude.profile_opencl_device()` function
 - the `kernel` command is exported as the `oclude.profile_opencl_kernel()` function
 
-Their complete documentation can be found in the [wiki](https://github.com/zehanort/oclude/wiki).
+Their complete documentation can be found in the respective [wiki page](https://github.com/zehanort/oclude/wiki/Python-module-usage).
 
 ## Limitations & known issues
 
