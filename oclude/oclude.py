@@ -3,6 +3,7 @@ import os
 from functools import reduce
 from collections import Counter
 import operator
+import timeout_decorator
 
 import oclude.utils as utils
 
@@ -83,6 +84,12 @@ parser.add_argument('-t', '--time-it',
     action='store_true'
 )
 
+parser.add_argument('-x', '--timeout',
+    help='seconds after which ALL scheduled kernel executions are interrupted; use 0 to never interrupt (default: 30)',
+    type=int,
+    default=30
+)
+
 # cache flags #
 parser.add_argument('--clear-cache',
     help='remove every cached info (irreversible)',
@@ -107,6 +114,7 @@ def profile_opencl_kernel(file, kernel,
                           platform_id=0, device_id=0,
                           samples=1,
                           instcounts=False, timeit=False,
+                          timeout=30,
                           verbose=False,
                           clear_cache=False, ignore_cache=False, no_cache_warnings=False):
 
@@ -199,14 +207,24 @@ def profile_opencl_kernel(file, kernel,
 
     ### STEP 2: run the kernel ###
     interact(f"Running kernel '{kernel}' from file {file}")
-    kernel_run_results = utils.run_kernel(
-        instrumented_file, kernel,
-        gsize, lsize,
-        platform_id, device_id,
-        samples,
-        instcounts, timeit,
-        verbose
-    )
+
+    @timeout_decorator.timeout(timeout, use_signals=False, timeout_exception=TimeoutError)
+    def run_kernel_with_timeout(a, b, c, d, e, f, g, h, i, j):
+        return utils.run_kernel(a, b, c, d, e, f, g, h, i, j)
+
+    try:
+        kernel_run_results = run_kernel_with_timeout(
+            instrumented_file, kernel,
+            gsize, lsize,
+            platform_id, device_id,
+            samples,
+            instcounts, timeit,
+            verbose
+        )
+    except TimeoutError as e:
+        raise TimeoutError(f'ERROR: Kernel executions timed out after {timeout} seconds. Aborting.')
+        exit(1)
+
     return {
         'original file':     file,
         'instrumented file': instrumented_file if instrumented_file != file else None,
