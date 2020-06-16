@@ -43,7 +43,8 @@ parser.add_argument('-g', '--gsize',
 
 parser.add_argument('-l', '--lsize',
     type=int,
-    help='The local NDRange, i.e. the number of work items in a work group'
+    help='The local NDRange, i.e. the number of work items in a work group (default: auto-selected)',
+    default=None
 )
 
 parser.add_argument('-p', '--platform',
@@ -110,7 +111,7 @@ parser.add_argument('--no-cache-warnings',
 )
 
 def profile_opencl_kernel(file, kernel,
-                          gsize, lsize,
+                          gsize, lsize=None,
                           platform_id=0, device_id=0,
                           samples=1,
                           instcounts=False, timeit=False,
@@ -122,8 +123,8 @@ def profile_opencl_kernel(file, kernel,
     interact.set_verbosity(verbose)
 
     # some sanity checks
-    if not lsize or not gsize:
-        interact(f'ERROR: arguments -g/--gsize and -l/--lsize are required')
+    if not gsize:
+        interact(f'ERROR: argument -g/--gsize is required')
         exit(1)
 
     if not os.path.exists(file):

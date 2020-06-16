@@ -54,7 +54,7 @@ def create_struct_type(device, struct_name, struct):
     struct_dtype = get_or_register_dtype(struct_name, struct_dtype)
     return struct_dtype
 
-def init_kernel_arguments(context, args, arg_types, gsize, lsize):
+def init_kernel_arguments(context, args, arg_types, gsize):
 
     arg_bufs, which_are_scalar = [], []
     hidden_global_hostbuf, hidden_global_buf = None, None
@@ -253,7 +253,7 @@ def run_kernel(kernel_file_path, kernel_name,
                 arg_types[kernel_arg_name] = typedefs[argtype_base]
 
     ### run the kernel as many times are requested by the user ###
-    interact(f'About to execute kernel with Global NDRange = {gsize} and Local NDRange = {lsize}')
+    interact(f'About to execute kernel with Global NDRange = {gsize}' + (f' and Local NDRange = {lsize}' if lsize else ''))
     interact(f'Number of executions (a.k.a. samples) to perform: {max(samples, 1)}')
 
     n_executions = trange(samples, unit=' kernel executions') if samples > 1 else range(1)
@@ -267,7 +267,7 @@ def run_kernel(kernel_file_path, kernel_name,
             which_are_scalar,
             hidden_global_hostbuf,
             hidden_global_buf
-        ) = init_kernel_arguments(context, args, arg_types, gsize, lsize)
+        ) = init_kernel_arguments(context, args, arg_types, gsize)
 
         ### step 5: set kernel arguments and run it!
         kernel.set_scalar_arg_dtypes(which_are_scalar)
@@ -276,7 +276,10 @@ def run_kernel(kernel_file_path, kernel_name,
             time_start = time()
             time_finish = None
 
-        event = kernel(queue, (gsize,), (lsize,), *arg_bufs)
+        if lsize:
+            event = kernel(queue, (gsize,), (lsize,), *arg_bufs)
+        else:
+            event = kernel(queue, (gsize,), None, *arg_bufs)
 
         if timeit:
             event.wait()
