@@ -143,13 +143,8 @@ Simply use the `--inst-counts/-i` flag to instrument the kernel and count the LL
 
 ```
 $ oclude -f tests/rodinia_kernels/dwt2d/com_dwt.cl -k c_CopySrcToComponents -g 1024 -l 128 -i
-[oclude] INFO: Input file tests/rodinia_kernels/dwt2d/com_dwt.cl is not cached
-[oclude] Instrumenting source file
-[instrumentation] Preprocessing source file
-[instrumentation] Compiling source to LLVM bitcode (1/2)
-[instrumentation] Retrieving instrumentation data from LLVM bitcode
-[instrumentation] Compiling source to LLVM bitcode (2/2)
-[instrumentation] Intrumentation completed successfully
+[oclude] INFO: Input file tests/rodinia_kernels/dwt2d/com_dwt.cl is cached
+[oclude] INFO: Using cached instrumented file
 [oclude] Running kernel 'c_CopySrcToComponents' from file tests/rodinia_kernels/dwt2d/com_dwt.cl
 [hostcode] Using the following device:
 [hostcode] Platform:	Intel(R) OpenCL HD Graphics
@@ -166,22 +161,23 @@ $ oclude -f tests/rodinia_kernels/dwt2d/com_dwt.cl -k c_CopySrcToComponents -g 1
 [hostcode] Collecting instruction counts...
 [hostcode] Kernel run completed successfully
 Instructions executed for kernel 'c_CopySrcToComponents':
-           29136 - load private
-           17408 - store private
-           16848 - alloca
+           26920 - load private
+           20776 - alloca
+           14336 - store private
            12288 - add
+           11631 - getelementptr
            11264 - mul
-           10158 - getelementptr
-           10158 - sext
+            8855 - store callee
+            7245 - load callee
             4096 - call
-            3454 - store callee
+            3072 - load global
+            3072 - load local
+            3072 - store local
             3072 - zext
-            2826 - load callee
-            2048 - trunc
-            1338 - br
+            2415 - sub
+            1829 - br
             1024 - ret
             1024 - icmp
-             942 - sub
 ```
 
 NOTE: The output of this mode was designed to resemble that of [Oclgrind](https://github.com/jrprice/Oclgrind).
