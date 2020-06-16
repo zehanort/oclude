@@ -4,8 +4,6 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <unordered_map>
-#include <algorithm>
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Instructions.h>
@@ -31,8 +29,6 @@ std::unique_ptr<llvm::Module> m;
 
 typedef std::vector<std::string>                    bb_instrumentation_t;
 typedef std::map<std::string, bb_instrumentation_t> instrumentation_t;
-
-std::unordered_map<std::string, unsigned> arg_addr_spaces;
 
 inline void parse_input_file(std::string filename) {
     llvm::SMDiagnostic error;
@@ -61,20 +57,9 @@ inline std::string get_address_space_of_operand(uint addrspace) {
     }
 }
 
-inline std::string resolve_memop(std::string memoptype, auto instr, bool is_kernel) {
-    std::string operand;
-    int i = (memoptype.rfind("load", 0) == 0 ? 0 : 1);
-    if (auto *gep = llvm::dyn_cast<llvm::GEPOperator>(instr->getOperand(i)))
-        operand = gep->getPointerOperand()->getName().str();
-    else
-        operand = instr->getOperand(i)->getName().str();
-
-    if (is_kernel) {
-        std::string addrspace_notation = get_address_space_of_operand(arg_addr_spaces[operand]);
-        return memoptype + ' ' + addrspace_notation;
-    }
-    else
-        return memoptype + " callee";
+inline std::string resolve_memop(auto instr, bool is_kernel) {
+    if (is_kernel) return get_address_space_of_operand(instr->getPointerAddressSpace());
+    return "callee";
 }
 
 inline instrumentation_t get_instrumentation_info_from_module() {
@@ -93,30 +78,6 @@ inline instrumentation_t get_instrumentation_info_from_module() {
         is_kernel = std::find(kernels.begin(), kernels.end(), funcname) != kernels.end();
         print_message("reporting about function " + funcname + (is_kernel ? " (kernel function)" : ""));
 
-        /*
-         If the current function is a kernel, we need to differentiate between the address spaces
-         of the operands of the load/store instructions.
-         If the current fucntion is not a kernel, we will label these mem ops as "{load,store} callee"
-         */
-        if (is_kernel) {
-            /* create a dictionary from kernel argument names to address spaces */
-            arg_addr_spaces.clear();
-            auto *argmeta = func->getMetadata("kernel_arg_addr_space");
-            auto current_arg = func->arg_begin();
-            for (auto x = argmeta->op_begin(); x != argmeta->op_end(); x++) {
-                auto addrspace = llvm::dyn_cast<llvm::ConstantInt>(llvm::cast<llvm::ValueAsMetadata>(x->get())->getValue());
-                if (addrspace->equalsInt(ADDRESS_SPACE::PRIVATE))
-                    arg_addr_spaces[current_arg->getName().str()] = ADDRESS_SPACE::PRIVATE;
-                else if (addrspace->equalsInt(ADDRESS_SPACE::GLOBAL))
-                    arg_addr_spaces[current_arg->getName().str()] = ADDRESS_SPACE::GLOBAL;
-                else if (addrspace->equalsInt(ADDRESS_SPACE::CONSTANT))
-                    arg_addr_spaces[current_arg->getName().str()] = ADDRESS_SPACE::CONSTANT;
-                else if (addrspace->equalsInt(ADDRESS_SPACE::LOCAL))
-                    arg_addr_spaces[current_arg->getName().str()] = ADDRESS_SPACE::LOCAL;
-                current_arg++;
-            }
-        }
-
         unsigned i = 1;
         for (llvm::Function::const_iterator bb = func->begin(); bb != func->end(); bb++) {
 
@@ -132,11 +93,11 @@ inline instrumentation_t get_instrumentation_info_from_module() {
                 print_message("\t\tinstruction " + (std::string)instr.getOpcodeName() + extra_info);
                 if (!loc || loc.getLine() != 0) {
                     /* special handling for load/store operations */
-                    if (llvm::isa<llvm::LoadInst>(instr))
-                        bb_instrumentation.push_back(resolve_memop("load", &instr, is_kernel));
-                    else if (llvm::isa<llvm::StoreInst>(instr))
-                        bb_instrumentation.push_back(resolve_memop("store", &instr, is_kernel));
-                    else if (llvm::isa<llvm::CallInst>(instr)) {
+                    if (llvm::isa<llvm::LoadInst>(&instr))
+                        bb_instrumentation.push_back("load " + resolve_memop(llvm::cast<llvm::LoadInst>(&instr), is_kernel));
+                    else if (llvm::isa<llvm::StoreInst>(&instr))
+                        bb_instrumentation.push_back("store " + resolve_memop(llvm::cast<llvm::StoreInst>(&instr), is_kernel));
+                    else if (llvm::isa<llvm::CallInst>(&instr)) {
                         /* we discard unlocalized calls as internal to LLVM */
                         if (loc)
                             bb_instrumentation.push_back(std::to_string(loc.getLine()) + ':' + "call");
