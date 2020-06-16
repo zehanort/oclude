@@ -20,7 +20,7 @@ instrumentationGetter = os.path.join(bindir, 'instrumentation-parser')
 ### 3rd pass tools ###
 cl2llCompiler = 'clang'
 cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm', '-S', '-cl-std=CL2.0',
-                      '-target', 'spir',
+                      '-target', 'spir64',
                       '-Xclang', '-finclude-default-header', '-fno-discard-value-names']
 
 def instrument_file(file, verbose):
