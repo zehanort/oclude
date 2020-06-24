@@ -13,3 +13,5 @@
 **/yacctab.py
 **/env
 **/*.egg-info
+
+**/.ipynb_checkpoints/**
