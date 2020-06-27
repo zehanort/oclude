@@ -1,1 +1,2 @@
 tests/**/*.cl linguist-detectable=false
+research/** linguist-detectable=false
