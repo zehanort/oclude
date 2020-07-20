@@ -23,7 +23,7 @@ cl2llCompilerFlags = ['-g', '-c', '-x', 'cl', '-emit-llvm', '-S', '-cl-std=CL2.0
                       '-target', 'spir64',
                       '-Xclang', '-finclude-default-header', '-fno-discard-value-names']
 
-def instrument_file(file, verbose):
+def instrument_file(file, verbose, static_features=False):
 
     if not os.path.exists(file):
         interact(f'Error: {file} is not a file')
@@ -105,9 +105,13 @@ def instrument_file(file, verbose):
         instrumentation_data = instrumentation_data.replace('|' + inline_line + ':call', '|retNOT', 1)
 
     # now add them to the source file, eventually instrumenting it
-    add_instrumentation_data_to_file(file, kernelFuncs, instrumentation_data, parser)
+    instrumentation_per_function = add_instrumentation_data_to_file(
+        file, kernelFuncs, instrumentation_data, parser
+    )
 
     # instrumentation is done! Congrats!
+    if static_features:
+        return instrumentation_per_function
 
     # store a prettified (i.e. easier to read/inspect) format in the cache
     with open(file, 'r') as f:

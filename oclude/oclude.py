@@ -6,6 +6,7 @@ import operator
 import timeout_decorator
 
 import oclude.utils as utils
+from oclude.utils.constants import llvm_instructions
 
 # define the arguments of oclude
 parser = argparse.ArgumentParser(
@@ -109,6 +110,22 @@ parser.add_argument('--no-cache-warnings',
     dest='no_cache_warnings',
     action='store_true'
 )
+
+def get_opencl_kernel_static_instcounts(file, kernel, verbose=False):
+
+    import tempfile, shutil
+    tempdir = tempfile.gettempdir()
+    tempfile = os.path.join(tempdir, 'oclude_static_thingies.cl')
+    shutil.copy2(file, tempfile)
+
+    kernel_instcounts = utils.instrument_file(tempfile, verbose, static_features=True)[kernel]
+    instcounts = dict((i, 0) for i in llvm_instructions)
+    for bb in kernel_instcounts:
+        for instruction, count in bb:
+            instcounts[instruction] += count
+
+    os.remove(tempfile)
+    return instcounts
 
 def profile_opencl_kernel(file, kernel,
                           gsize, lsize=None,

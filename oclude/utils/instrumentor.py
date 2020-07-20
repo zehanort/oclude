@@ -625,3 +625,6 @@ def add_instrumentation_data_to_file(filename, kernels, instr_data_raw, parser):
     instrumentor = OcludeInstrumentor(kernels, instrumentation_per_function)
     with open(filename, 'w') as f:
         f.write(instrumentor.visit(ast))
+
+    # return instrumentation dict to facilitate static feature extraction
+    return instrumentation_per_function
