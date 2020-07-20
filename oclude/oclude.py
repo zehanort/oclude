@@ -122,7 +122,10 @@ def get_opencl_kernel_static_instcounts(file, kernel, verbose=False):
     instcounts = dict((i, 0) for i in llvm_instructions)
     for bb in kernel_instcounts:
         for instruction, count in bb:
-            instcounts[instruction] += count
+            if instruction == 'retNOT':
+                instcounts['ret'] -= count
+            else:
+                instcounts[instruction] += count
 
     os.remove(tempfile)
     return instcounts
