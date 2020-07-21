@@ -1,4 +1,5 @@
 **/desk/
+**/*.bak
 
 **/build/
 **/bin/
