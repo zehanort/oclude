@@ -15,5 +15,5 @@ setup(
     install_requires = ['pycparserext>=2020.1', 'pyopencl>=2020.1', 'rvg', 'timeout-decorator', 'tqdm'],
     python_requires =  '>=3.6',
     entry_points =     { 'console_scripts': ['oclude=oclude.oclude:run'] },
-    packages =         ['oclude']
+    packages =         ['oclude', 'oclude.utils']
 )
