@@ -170,9 +170,13 @@ def run_kernel(kernel_file_path, kernel_name,
     interact('Version:\t' + device.version.strip())
 
     context = cl.Context([device])
+    # TODO: what happens if this extension is not supported by the OpenCL device??
     with open(kernel_file_path, 'r') as kernel_file:
-        kernel_source = '#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable\n' + kernel_file.read()
-    program = cl.Program(context, kernel_source).build()
+        if instcounts:
+            kernel_source = '#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable\n' + kernel_file.read()
+        else:
+            kernel_source = kernel_file.read()
+    program = cl.Program(context, kernel_source).build(options=['-cl-kernel-arg-info'])
 
     if timeit:
         queue = cl.CommandQueue(context, properties=cl.command_queue_properties.PROFILING_ENABLE)
