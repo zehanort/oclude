@@ -230,8 +230,8 @@ def profile_opencl_kernel(file, kernel,
     interact(f"Running kernel '{kernel}' from file {file}")
 
     @timeout_decorator.timeout(timeout, use_signals=False, timeout_exception=TimeoutError)
-    def run_kernel_with_timeout(a, b, c, d, e, f, g, h, i, j):
-        return utils.run_kernel(a, b, c, d, e, f, g, h, i, j)
+    def run_kernel_with_timeout(*args):
+        return utils.run_kernel(*args)
 
     try:
         kernel_run_results = run_kernel_with_timeout(
@@ -312,6 +312,8 @@ def run():
         if samples > 1:
             interact('done', prompt=False)
 
+    reduced_results['bytes'] = dict(results[0]['bytes'])
+
     # in the CLI of oclude, we only need the average of the samples
     results = reduced_results
 
@@ -328,3 +330,8 @@ def run():
                 + ('average, ' if args.samples > 1 else '') + "in milliseconds):")
         for timing_scope, time_elapsed in kernel_results.items():
             print(f'{timing_scope:>{indent}} - {time_elapsed}')
+
+    indent = len('Bytes read from device')
+    print(f"Data transfer info regarding the execution for kernel '{selected_kernel}':")
+    print(f'{"Bytes sent to device":>{indent}} - {results["bytes"]["in"]}')
+    print(f'{"Bytes read from device":>{indent}} - {results["bytes"]["out"]}')

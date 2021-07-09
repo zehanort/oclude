@@ -15,6 +15,7 @@ from pycparserext.ext_c_parser import OpenCLCParser
 from pycparser.c_ast import *
 
 from rvg import NumPyRVG
+from openclio import argsIOrole
 import numpy as np
 import os
 from tqdm import trange
@@ -58,10 +59,26 @@ def init_kernel_arguments(context, args, arg_types, gsize):
 
     arg_bufs, which_are_scalar = [], []
     hidden_global_hostbuf, hidden_global_buf = None, None
-    mem_flags = cl.mem_flags.READ_WRITE | cl.mem_flags.COPY_HOST_PTR
+    mem_flags_input = cl.mem_flags.READ_ONLY | cl.mem_flags.COPY_HOST_PTR | cl.mem_flags.HOST_WRITE_ONLY
+    mem_flags_output = cl.mem_flags.WRITE_ONLY | cl.mem_flags.HOST_READ_ONLY
+    mem_flags_io = cl.mem_flags.READ_WRITE | cl.mem_flags.COPY_HOST_PTR
     rand = NumPyRVG(limit=gsize)
+    bytes_in, bytes_out = 0, 0
 
-    for (argname, argtypename, argaddrqual), argtype in zip(args, arg_types.values()):
+    for (argname, argtypename, argaddrqual, argiorole), argtype in zip(args, arg_types.values()):
+
+        is_input, is_output = False, False
+        if argiorole is not None:
+            if 'input' in argiorole and 'output' in argiorole:
+                mem_flags = mem_flags_io
+                is_input = True
+                is_output = True
+            elif 'input' in argiorole:
+                mem_flags = mem_flags_input
+                is_input = True
+            else:
+                mem_flags = mem_flags_output
+                is_output = True
 
         # special handling of oclude hidden buffers
         if argname == hidden_counter_name_local:
@@ -83,15 +100,28 @@ def init_kernel_arguments(context, args, arg_types, gsize):
             which_are_scalar.append(argtype)
             val = rand(argtype)
             arg_bufs.append(val if not arg_is_local else cl.LocalMemory(val.itemsize))
+            if not arg_is_local:
+                if 'input' in argiorole:
+                    bytes_in += np.dtype(argtype).itemsize
+                if 'output' in argiorole:
+                    bytes_out += np.dtype(argtype).itemsize
         # argument is buffer
         else:
             which_are_scalar.append(None)
-            val = rand(argtype, gsize)
-            arg_bufs.append(
-                cl.Buffer(context, mem_flags, hostbuf=val) if not arg_is_local else cl.LocalMemory(len(val) * val.dtype.itemsize)
-            )
+            if arg_is_local:
+                arg_bufs.append(cl.LocalMemory(len(val) * val.dtype.itemsize))
+            elif is_input:
+                val = rand(argtype, gsize)
+                arg_bufs.append(cl.Buffer(context, mem_flags, hostbuf=val))
+            else:
+                arg_bufs.append(None)
+            if not arg_is_local:
+                if 'input' in argiorole:
+                    bytes_in += np.dtype(argtype).itemsize * gsize
+                if 'output' in argiorole:
+                    bytes_out += np.dtype(argtype).itemsize * gsize
 
-    return arg_bufs, which_are_scalar, hidden_global_hostbuf, hidden_global_buf
+    return arg_bufs, which_are_scalar, hidden_global_hostbuf, hidden_global_buf, bytes_in, bytes_out
 
 def profile_opencl_device(platform_id=0, device_id=0, verbose=False):
 
@@ -191,6 +221,8 @@ def run_kernel(kernel_file_path, kernel_name,
 
     args = []
 
+    args_io_role = argsIOrole(kernel_name, kernel_source, kernel_file_path)
+
     for idx in range(nargs):
         kernel_arg_name = kernel.get_arg_info(idx, cl.kernel_arg_info.NAME)
         is_oclude_hidden_buffer = kernel_arg_name in [hidden_counter_name_local, hidden_counter_name_global]
@@ -200,9 +232,17 @@ def run_kernel(kernel_file_path, kernel_name,
         kernel_arg_address_qualifier = cl.kernel_arg_address_qualifier.to_string(
             kernel.get_arg_info(idx, cl.kernel_arg_info.ADDRESS_QUALIFIER)
         ).lower()
+        kernel_arg_io_role = None
+        for k, v in args_io_role.items():
+            if k.strip().split('%')[1] == kernel_arg_name:
+                kernel_arg_io_role = v
+                break
         if not is_oclude_hidden_buffer:
-            interact(f'{kernel_arg_name} ({kernel_arg_type_name}, {kernel_arg_address_qualifier})', prompt=False)
-        args.append((kernel_arg_name, kernel_arg_type_name, kernel_arg_address_qualifier))
+            interact(
+                f'{kernel_arg_name} ({kernel_arg_type_name}, {kernel_arg_address_qualifier}, {kernel_arg_io_role})',
+                prompt=False
+            )
+        args.append((kernel_arg_name, kernel_arg_type_name, kernel_arg_address_qualifier, kernel_arg_io_role))
 
     ### step 3: collect arg types ###
     arg_types = {}
@@ -211,7 +251,7 @@ def run_kernel(kernel_file_path, kernel_name,
     typedefs = {}
     structs = {}
 
-    for kernel_arg_name, kernel_arg_type_name, _ in args:
+    for kernel_arg_name, kernel_arg_type_name, _, _ in args:
 
         argtype_base = kernel_arg_type_name.split('*')[0]
 
@@ -270,7 +310,8 @@ def run_kernel(kernel_file_path, kernel_name,
             arg_bufs,
             which_are_scalar,
             hidden_global_hostbuf,
-            hidden_global_buf
+            hidden_global_buf,
+            bytes_in, bytes_out
         ) = init_kernel_arguments(context, args, arg_types, gsize)
 
         ### step 5: set kernel arguments and run it!
@@ -312,6 +353,8 @@ def run_kernel(kernel_file_path, kernel_name,
                 'device':   device_time_elapsed,
                 'transfer': hostcode_time_elapsed - device_time_elapsed
             }
+
+        this_run_results['bytes'] = { 'in': bytes_in, 'out': bytes_out }
 
         if this_run_results:
             results.append(this_run_results)
