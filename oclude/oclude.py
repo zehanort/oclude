@@ -92,6 +92,12 @@ parser.add_argument('-x', '--timeout',
     default=30
 )
 
+parser.add_argument('-m', '--fine_mem_handling',
+    help='attempt to handle kernel buffers in respect to their I/O function instead of read/write',
+    dest='fine_mem_handling',
+    action='store_true'
+)
+
 # cache flags #
 parser.add_argument('--clear-cache',
     help='remove every cached info (irreversible)',
@@ -135,6 +141,7 @@ def profile_opencl_kernel(file, kernel,
                           platform_id=0, device_id=0,
                           samples=1,
                           instcounts=False, timeit=False,
+                          fine_mem_handling=False,
                           timeout=30,
                           verbose=False,
                           clear_cache=False, ignore_cache=False, no_cache_warnings=False):
@@ -240,6 +247,7 @@ def profile_opencl_kernel(file, kernel,
             platform_id, device_id,
             samples,
             instcounts, timeit,
+            fine_mem_handling,
             verbose
         )
     except TimeoutError as e:
@@ -312,7 +320,8 @@ def run():
         if samples > 1:
             interact('done', prompt=False)
 
-    reduced_results['bytes'] = dict(results[0]['bytes'])
+    if args.fine_mem_handling:
+        reduced_results['bytes'] = dict(results[0]['bytes'])
 
     # in the CLI of oclude, we only need the average of the samples
     results = reduced_results
@@ -331,7 +340,8 @@ def run():
         for timing_scope, time_elapsed in kernel_results.items():
             print(f'{timing_scope:>{indent}} - {time_elapsed}')
 
-    indent = len('Bytes read from device')
-    print(f"Data transfer info regarding the execution for kernel '{selected_kernel}':")
-    print(f'{"Bytes sent to device":>{indent}} - {results["bytes"]["in"]}')
-    print(f'{"Bytes read from device":>{indent}} - {results["bytes"]["out"]}')
+    if args.fine_mem_handling:
+        indent = len('Bytes read from device')
+        print(f"Data transfer info regarding the execution for kernel '{selected_kernel}':")
+        print(f'{"Bytes sent to device":>{indent}} - {results["bytes"]["in"]}')
+        print(f'{"Bytes read from device":>{indent}} - {results["bytes"]["out"]}')

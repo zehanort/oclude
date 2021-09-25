@@ -5,7 +5,7 @@ except ImportError:
 
 setup(
     name =             'oclude',
-    version =          '0.10',
+    version =          '0.11',
     description =      'OpenCL Universal Driving Environment',
     long_description = 'An OpenCL driver to test and run standalone kernels on arbitrary devices',
     author =           'Sotiris Niarchos',

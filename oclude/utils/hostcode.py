@@ -68,17 +68,16 @@ def init_kernel_arguments(context, args, arg_types, gsize):
     for (argname, argtypename, argaddrqual, argiorole), argtype in zip(args, arg_types.values()):
 
         is_input, is_output = False, False
-        if argiorole is not None:
-            if 'input' in argiorole and 'output' in argiorole:
-                mem_flags = mem_flags_io
-                is_input = True
-                is_output = True
-            elif 'input' in argiorole:
-                mem_flags = mem_flags_input
-                is_input = True
-            else:
-                mem_flags = mem_flags_output
-                is_output = True
+        if argiorole is None or ('input' in argiorole and 'output' in argiorole):
+            mem_flags = mem_flags_io
+            is_input = True
+            is_output = True
+        elif 'input' in argiorole:
+            mem_flags = mem_flags_input
+            is_input = True
+        else:
+            mem_flags = mem_flags_output
+            is_output = True
 
         # special handling of oclude hidden buffers
         if argname == hidden_counter_name_local:
@@ -100,7 +99,7 @@ def init_kernel_arguments(context, args, arg_types, gsize):
             which_are_scalar.append(argtype)
             val = rand(argtype)
             arg_bufs.append(val if not arg_is_local else cl.LocalMemory(val.itemsize))
-            if not arg_is_local:
+            if not arg_is_local and argiorole:
                 if 'input' in argiorole:
                     bytes_in += np.dtype(argtype).itemsize
                 if 'output' in argiorole:
@@ -115,7 +114,7 @@ def init_kernel_arguments(context, args, arg_types, gsize):
                 arg_bufs.append(cl.Buffer(context, mem_flags, hostbuf=val))
             else:
                 arg_bufs.append(None)
-            if not arg_is_local:
+            if not arg_is_local and argiorole:
                 if 'input' in argiorole:
                     bytes_in += np.dtype(argtype).itemsize * gsize
                 if 'output' in argiorole:
@@ -172,7 +171,7 @@ def run_kernel(kernel_file_path, kernel_name,
                gsize, lsize,
                platform_id, device_id,
                samples,
-               instcounts, timeit,
+               instcounts, timeit, fine_mem_handling,
                verbose):
     '''
     The hostcode wrapper function
@@ -221,7 +220,8 @@ def run_kernel(kernel_file_path, kernel_name,
 
     args = []
 
-    args_io_role = argsIOrole(kernel_name, kernel_source, kernel_file_path)
+    if fine_mem_handling:
+        args_io_role = argsIOrole(kernel_name, kernel_source, kernel_file_path)
 
     for idx in range(nargs):
         kernel_arg_name = kernel.get_arg_info(idx, cl.kernel_arg_info.NAME)
@@ -233,13 +233,15 @@ def run_kernel(kernel_file_path, kernel_name,
             kernel.get_arg_info(idx, cl.kernel_arg_info.ADDRESS_QUALIFIER)
         ).lower()
         kernel_arg_io_role = None
-        for k, v in args_io_role.items():
-            if k.strip().split('%')[1] == kernel_arg_name:
-                kernel_arg_io_role = v
-                break
+        if fine_mem_handling:
+            for k, v in args_io_role.items():
+                if k.strip().split('%')[1] == kernel_arg_name:
+                    kernel_arg_io_role = v
+                    break
         if not is_oclude_hidden_buffer:
             interact(
-                f'{kernel_arg_name} ({kernel_arg_type_name}, {kernel_arg_address_qualifier}, {kernel_arg_io_role})',
+                f'{kernel_arg_name} ({kernel_arg_type_name}, {kernel_arg_address_qualifier}'
+                + (f', {kernel_arg_io_role})' if kernel_arg_io_role else ')'),
                 prompt=False
             )
         args.append((kernel_arg_name, kernel_arg_type_name, kernel_arg_address_qualifier, kernel_arg_io_role))
@@ -354,7 +356,8 @@ def run_kernel(kernel_file_path, kernel_name,
                 'transfer': hostcode_time_elapsed - device_time_elapsed
             }
 
-        this_run_results['bytes'] = { 'in': bytes_in, 'out': bytes_out }
+        if fine_mem_handling:
+            this_run_results['bytes'] = { 'in': bytes_in, 'out': bytes_out }
 
         if this_run_results:
             results.append(this_run_results)
