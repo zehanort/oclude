@@ -107,6 +107,7 @@ def init_kernel_arguments(context, args, arg_types, gsize):
         # argument is buffer
         else:
             which_are_scalar.append(None)
+            val = rand(argtype, gsize)
             if arg_is_local:
                 arg_bufs.append(cl.LocalMemory(len(val) * val.dtype.itemsize))
             elif is_input:
